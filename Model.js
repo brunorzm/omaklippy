@@ -780,11 +780,18 @@ function buildActionsModel(printer, status, printerCommands) {
   return model
 }
 
+// Slicer file names rarely have spaces, and the native dialog only wraps at
+// word boundaries, so a long name ran past its border (seen on the Voron). A
+// zero-width space after "_", "-" and "." gives it places to break.
+function breakable(text) {
+  return text.replace(/([_.\-])/g, "$1\u200B")
+}
+
 // Confirmation texts; "" means the action asks nothing (the panel then
 // refuses to open a confirmation for it).
 function confirmMessage(action, displayName, filename) {
   var name = stringOr(displayName, "")
-  var file = stringOr(filename, "")
+  var file = breakable(stringOr(filename, ""))
   if (action === "cancel")
     return file !== "" ? fill(TEXT.confirm.cancelMessage, file, name) : fill(TEXT.confirm.cancelMessageNoFile, name)
   if (action === "emergencyStop") return fill(TEXT.confirm.emergencyMessage, name)

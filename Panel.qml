@@ -168,21 +168,21 @@ Panel {
 
   component ActionButton: Button {
     id: actionButton
-    property var action: ({})
+    property var actionData: ({})
 
-    text: action.label || ""
-    iconText: action.busy ? Model.ACTION_GLYPHS.busy : (action.glyph || "")
-    iconSpinning: action.busy === true
-    enabled: action.enabled === true
-    opacity: enabled || action.busy ? 1 : root.disabledOpacity
+    text: actionData.label || ""
+    iconText: actionData.busy ? Model.ACTION_GLYPHS.busy : (actionData.glyph || "")
+    iconSpinning: actionData.busy === true
+    enabled: actionData.enabled === true
+    opacity: enabled || actionData.busy ? 1 : root.disabledOpacity
     bordered: true
-    hasCursor: root.cursorStop !== "" && root.cursorStop === action.id
+    hasCursor: root.cursorStop !== "" && root.cursorStop === actionData.id
     foreground: root.foreground
     fontFamily: root.fontFamily
     fontSize: Style.font.bodySmall
-    onClicked: root.activate(action.id)
+    onClicked: root.activate(actionData.id)
     onHovered: function(isHovered) {
-      if (isHovered && actionButton.enabled) root.cursorStop = action.id
+      if (isHovered && actionButton.enabled) root.cursorStop = actionData.id
     }
   }
 
@@ -413,7 +413,7 @@ Panel {
                   ActionButton {
                     required property var modelData
                     width: primaryRow.cellWidth
-                    action: modelData
+                    actionData: modelData
                   }
                 }
               }
@@ -432,7 +432,7 @@ Panel {
                 id: emergencyButton
                 visible: root.actions.emergency !== null
                 width: parent.width
-                action: root.actions.emergency || ({})
+                actionData: root.actions.emergency || ({})
                 background: enabled ? Util.alpha(root.urgent, root.emergencyFillAlpha) : "transparent"
               }
 

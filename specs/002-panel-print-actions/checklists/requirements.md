@@ -33,5 +33,8 @@
 
 - Resolvido em 2026-09-29: parada de emergência com confirmação simples (US3, FR-009).
 - "Klipper", "Mainsail", "trusted_clients" e "macros" aparecem como termos do domínio do usuário.
+- Emendas de 2026-09-29: e-stop disponível com outro comando em andamento (Clarifications,
+  FR-012); FR-015 (falha visível mesmo sem botões) e SC-002 (rede local) esclarecidos após o
+  `/speckit-analyze`.
 - Decisões tomadas por padrão: botões por estado (FR-002 a FR-005), cancelamento com confirmação,
   sem reenvio automático, abrir interface web fora de escopo.

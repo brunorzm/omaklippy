@@ -245,9 +245,11 @@ test("buildActionsModel never throws", () => {
 // ---- Confirmation texts
 
 test("confirmMessage and confirmLabel for cancel", () => {
-  assert.equal(M.confirmMessage("cancel", "Voron", "hook.gcode"), 'Cancel the print "hook.gcode" on Voron?')
+  // File names get a zero-width space after "_", "-" and "." so the dialog can wrap them.
+  const ZW = "\u200B"
+  assert.equal(M.confirmMessage("cancel", "Voron", "hook.gcode"), 'Cancel the print "hook.' + ZW + 'gcode" on Voron?')
   assert.equal(M.confirmMessage("cancel", "Voron", ""), "Cancel the current print on Voron?")
-  assert.equal(M.confirmMessage("cancel", "Voron", "a%2.gcode"), 'Cancel the print "a%2.gcode" on Voron?')
+  assert.equal(M.confirmMessage("cancel", "Voron", "a%2.gcode"), 'Cancel the print "a%2.' + ZW + 'gcode" on Voron?')
   for (const a of ["pause", "resume", "explode", null]) assert.equal(M.confirmMessage(a, "Voron", "x"), "")
   assert.equal(M.confirmLabel("cancel"), "Cancel print")
   for (const a of ["pause", "resume", "explode", null]) assert.equal(M.confirmLabel(a), "")
@@ -289,4 +291,16 @@ test("buildActionsModel shows a failure even when no button is left (printer wen
   const m = model("offline", failed)
   assert.deepEqual(m.buttons, [])
   assert.equal(m.failureText, "Pause failed: connection refused")
+})
+
+test("confirmMessage lets a long file name without spaces wrap (seen on the Voron)", () => {
+  const name = "CleanWalk_Duo_2025_12_31_assembly_brimmed_ABS_22m23s.gcode"
+  const msg = M.confirmMessage("cancel", "Voron", name)
+  assert.equal(msg.replace(/\u200B/g, ""), 'Cancel the print "' + name + '" on Voron?', "text unchanged apart from the break points")
+  assert.equal((msg.match(/\u200B/g) || []).length, 9)
+  assert.ok(msg.includes("CleanWalk_\u200BDuo_\u200B"))
+})
+
+test("real Voron capture of a pause POST (Moonraker v0.11) is a success", () => {
+  assert.deepEqual(action("action-ok"), { ok: true, message: "" })
 })

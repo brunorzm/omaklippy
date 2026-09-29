@@ -43,3 +43,6 @@ jq -n --argjson e "$code" --arg s "$out" '{exitCode: $e, stdout: $s}' > tests/fi
 
 **Warning**: this really pauses the printer. Only the printer's owner runs it, never an
 automated tool.
+
+`action-ok.json` is a real capture: a pause `POST` to the Voron (Moonraker v0.11), taken by the
+printer's owner during the slice 002 hardware test.

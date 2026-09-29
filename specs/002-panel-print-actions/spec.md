@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Draft
+**Status**: Concluída em 2026-09-29 (teste em hardware aprovado; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "ações no painel: pausar, retomar, cancelar, parada de emergência"
 
