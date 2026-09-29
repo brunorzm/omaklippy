@@ -131,3 +131,11 @@ test("real Biqu capture outside trusted_clients (401 + traceback) → error with
   assert.equal(r.httpStatus, 401)
   assert.equal(M.deriveState(r).reason, "acesso não autorizado — libere este computador em trusted_clients")
 })
+
+test("real Voron FIRMWARE_RESTART sequence: 'Klippy Disconnected' 503, then startup", () => {
+  assert.deepEqual(M.deriveState(parse("klippy-restarting")), { state: "error", reason: "Klippy Disconnected" })
+  const r = parse("startup")
+  assert.equal(r.klippyState, "startup")
+  assert.equal(M.deriveState(r).state, "error")
+  assert.ok(M.deriveState(r).reason.length > 0)
+})

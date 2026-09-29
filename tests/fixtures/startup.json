@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\":{\"eventtime\":8329.436920868,\"status\":{\"webhooks\":{\"state\":\"startup\",\"state_message\":\"\\nPrinter is not ready\\nThe klippy host software is attempting to connect.  Please\\nretry in a few moments.\\n\"},\"print_stats\":{\"filename\":\"\",\"total_duration\":0.0,\"print_duration\":0.0,\"filament_used\":0.0,\"state\":\"standby\",\"message\":\"\",\"info\":{\"total_layer\":null,\"current_layer\":null}},\"virtual_sdcard\":{\"file_path\":null,\"progress\":0.0,\"is_active\":false,\"file_position\":0,\"file_size\":0},\"display_status\":{\"progress\":0.0,\"message\":null},\"extruder\":{\"temperature\":0.0,\"target\":0.0},\"heater_bed\":{\"temperature\":0.0,\"target\":0.0}}}}\n200"
+}

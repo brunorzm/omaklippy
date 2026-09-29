@@ -20,7 +20,7 @@ impressora real · [ ] pendente.
 US1 ícone:    [x] ociosa (Voron real)  [x] imprimindo (Voron real, aquecendo a câmara: 0%)  [~] pausada  [x] fim (Voron real: `complete` → ociosa)  [ ] cancelado  [x] troca de tema (Catppuccin Latte e Tokyo Night: ícone, selo vermelho de erro e painel acompanham)
               [x] barra vertical (com o Moonraker falso)
 US2 falhas:   [x] desligada (Biqu B1 na tomada: offline em ≤ 8 s, sem dados antigos, volta sozinha como erro)  [ ] Wi-Fi  [~] sem resposta (servidor travado)  [x] endereço inexistente
-              [x] shutdown real do MCU (Biqu B1: termistor do bico fora da faixa; ícone com selo e mensagem do Klipper legível no painel)  [ ] M112  [x] klipper parado (503 real na Biqu B1: "Klippy Host not connected", sem temperaturas)  [x] 401 real (Biqu B1 sem 192.168.0.0/16 em trusted_clients)  [x] curl ausente (binário inexistente)
+              [x] shutdown real do MCU (Biqu B1: termistor do bico fora da faixa; ícone com selo e mensagem do Klipper legível no painel)  [x] FIRMWARE_RESTART real na Voron (~5 s: 503 "Klippy Disconnected" → 503 "Klippy Host not connected" → 200 `startup` → ready; o plugin mostra erro com mensagem legível e volta sozinho)  [ ] M112  [x] klipper parado (503 real na Biqu B1: "Klippy Host not connected", sem temperaturas)  [x] 401 real (Biqu B1 sem 192.168.0.0/16 em trusted_clients)  [x] curl ausente (binário inexistente)
 US3 painel:   [x] detalhes da Voron ociosa  [x] detalhes imprimindo (Voron real: arquivo, 0%, restante "—", mesa 105/118 °C)  [x] impressão real avançando (Voron: 16% com restante 36m, depois 27%)
               [~] restante "—"  [x] fecha com Escape e hide  [x] abre com clique no ícone e fecha com clique fora (usuário)
 US4 seletor:  [x] mais relevante (Biqu em erro acima da Voron imprimindo; Biqu offline → Voron imprimindo passa a ser a destacada)  [x] troca pelo teclado (j/k + Enter)  [x] troca pelo mouse (usuário)  [x] ícone segue a escolha (decisão de 2026-09-29)
@@ -36,8 +36,9 @@ Desempenho:   [x] 5 impressoras (3 inexistentes): no máximo 3 curl simultâneos
 1. Na Voron: pausa/retomada e cancelamento (opcionais, mexem numa impressão real).
 2. `FIRMWARE_RESTART` na Biqu → volta a ociosa.
 4. Desligar o Wi-Fi do computador → tudo offline e volta sozinho (fazer por último; derruba a sessão do assistente).
-9. Capturar as fixtures reais que faltam (T048): `paused`, `cancelled`, `startup`.
-   Já reais: `standby`, `printing`, `complete`, `shutdown`, `klippy-disconnected`, `unauthorized`.
+9. Capturar as fixtures reais que faltam (T048): `paused`, `cancelled` (opcionais, exigem
+   interferir numa impressão real). Já reais: `standby`, `printing`, `complete`, `shutdown`,
+   `klippy-disconnected`, `klippy-restarting`, `startup`, `unauthorized`.
 
 10. ~~Investigar configurações vazias depois de reconectar o monitor~~ **Diagnosticado (bug do
     Omarchy 4.0.4)**: `Bar.applySettingsDelta` aplica mudanças de configuração só nos widgets em
