@@ -42,6 +42,12 @@ para trocar a impressora exibida. Os botões de ação desse painel ficam para a
   nomes em português como nomes de conceito; os textos exatos da interface estão em
   [contracts/display.md](./contracts/display.md) e [contracts/model-api.md](./contracts/model-api.md).
 
+### Session 2026-09-29 (seletor)
+
+- Q: Como o usuário escolhe a impressora no painel? → A: por um menu suspenso (dropdown)
+  "Printer", logo abaixo do cabeçalho, no lugar da lista. Cada opção mostra nome, estado e
+  progresso (p.ex. "Voron — printing 42%"), então o menu também serve de resumo das impressoras.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ver de relance na barra se a impressão vai bem (Priority: P1)
@@ -131,8 +137,8 @@ com um novo clique no ícone.
 
 ### User Story 4 - Alternar entre impressoras no painel (Priority: P2)
 
-Com várias impressoras cadastradas, o painel mostra uma lista compacta de todas, com nome,
-estado e progresso, e o usuário escolhe qual exibir em detalhe.
+Com várias impressoras cadastradas, o painel mostra um menu suspenso (dropdown) com todas,
+cada opção com nome, estado e progresso, e o usuário escolhe qual exibir em detalhe.
 
 **Why this priority**: necessário para quem tem mais de uma impressora; com uma só, a lista não
 aparece.
@@ -145,17 +151,18 @@ que os detalhes trocam; testar com mouse e com teclado.
 1. **Given** várias impressoras cadastradas, **When** o painel abre, **Then** a selecionada é a
    mais relevante pela prioridade erro > imprimindo > pausada > offline > ociosa (empate: ordem
    de cadastro).
-2. **Given** o painel aberto com várias impressoras, **When** o usuário escolhe outra na lista
-   (clique, ou teclas de navegação e Enter), **Then** os detalhes passam a ser dessa impressora.
+2. **Given** o painel aberto com várias impressoras, **When** o usuário escolhe outra no menu
+   suspenso (clique, ou teclas de navegação e Enter), **Then** os detalhes passam a ser dessa
+   impressora.
 3. **Given** o usuário escolheu uma impressora manualmente, **When** fecha e reabre o painel
    durante a mesma sessão, **Then** a escolha é mantida; se essa impressora for removida do
    cadastro, volta a valer a mais relevante.
 6. **Given** o usuário escolheu uma impressora no painel, **When** olha a barra, **Then** o
    ícone passa a representar a impressora escolhida, mesmo que outra esteja em estado mais
    urgente.
-4. **Given** duas impressoras com o mesmo nome, **When** aparecem na lista, **Then** são
+4. **Given** duas impressoras com o mesmo nome, **When** aparecem no menu, **Then** são
    distinguíveis pelo endereço exibido junto ao nome.
-5. **Given** uma única impressora cadastrada, **When** o painel abre, **Then** a lista não
+5. **Given** uma única impressora cadastrada, **When** o painel abre, **Then** o menu não
    aparece.
 
 ---
@@ -253,8 +260,9 @@ uma e verificar que ela some do painel.
 - **FR-016**: O painel MUST exibir, para a impressora selecionada: nome, estado, motivo (em erro
   ou offline), há quanto tempo não responde (em offline), progresso, nome do arquivo, tempo
   restante estimado e temperaturas atual e alvo do bico e da mesa, quando aplicáveis.
-- **FR-017**: Com mais de uma impressora, o painel MUST listar todas com nome, estado e progresso
-  (quando houver) e permitir selecionar qualquer uma por mouse e por teclado.
+- **FR-017**: Com mais de uma impressora, o painel MUST oferecer um menu suspenso (dropdown) com
+  todas, cada opção com nome, estado e progresso (quando houver), e permitir selecionar qualquer
+  uma por mouse e por teclado.
 - **FR-018**: Ao abrir, o painel MUST selecionar a impressora mais relevante (prioridade do FR-002), a menos
   que o usuário tenha escolhido outra na mesma sessão do shell e ela ainda esteja cadastrada. A
   escolha não é persistida.

@@ -94,11 +94,12 @@ Durante todos os cenários, a barra mostra **só o ícone**, nunca texto.
 inexistente para simular)
 
 1. O ícone representa a mais relevante (erro > imprimindo > pausada > offline > ociosa).
-2. O painel abre com essa selecionada e a lista "PRINTERS" mostra todas.
-3. Selecione outra com clique; depois com j/k + Enter: o detalhe troca.
+2. O painel abre com essa selecionada; o dropdown "Printer" lista todas com estado e progresso.
+3. Selecione outra pelo dropdown com clique; depois com j, Enter, j/k e Enter: o detalhe troca.
+   Com o menu aberto, Escape fecha só o menu.
 4. Feche e reabra o painel: a escolha é mantida. Reinicie o shell: volta à mais relevante.
-5. Duas entradas com o mesmo nome: a lista mostra `Nome (host)` para as duas.
-6. Com uma impressora só, a lista não aparece.
+5. Duas entradas com o mesmo nome: o dropdown mostra `Nome (host)` para as duas.
+6. Com uma impressora só, o dropdown não aparece.
 
 **IPC e botões**: `omarchy-shell $PLUGIN_ID refresh` atualiza na hora, sem
 erro no log. Não há botões de ação no painel.

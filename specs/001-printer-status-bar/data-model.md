@@ -115,4 +115,5 @@ Mapeamento visual em [contracts/display.md](./contracts/display.md#ícone-na-bar
 | `empty` | `true` sem impressoras → estado vazio com instrução de cadastro (FR-020). |
 | `selected` | Linha de detalhe da impressora de `resolveSelection`: `displayName`, `state`, `stateLabel`, `reason`, `percent`, `filename`, `remainingText`, `nozzleText`, `bedText`, `freshnessText`. |
 | `showJob` | `true` em `printing`/`paused`. |
-| `rows` | Todas as impressoras na ordem de cadastro: `key`, `displayName`, `stateLabel`, `percentText`, `selected`. Vazia quando há só uma impressora (FR-017). |
+| `rows` | Todas as impressoras na ordem de cadastro: `key`, `displayName`, `stateLabel`, `percentText`, `optionLabel`, `selected`. Vazia quando há só uma impressora (FR-017). |
+| `options` | `{ value: key, label: optionLabel }` por impressora, para o dropdown "Printer". |

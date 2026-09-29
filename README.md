@@ -7,8 +7,8 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
   (dimmed while paused). On error the icon gets a badge in the theme's alert color; when the
   printer is offline the icon is faded. Hover shows one line: `Voron — printing 42%`.
 - **In the panel** (click the icon): state, progress, file, time remaining, nozzle and bed
-  temperatures, and how long ago the last answer came in. With more than one printer, a list lets
-  you pick which one to show (mouse, or `j`/`k` and Enter).
+  temperatures, and how long ago the last answer came in. With more than one printer, a "Printer"
+  dropdown lets you pick which one to show (mouse, or `j`, Enter, then `j`/`k` and Enter).
 - The icon stands for the printer you picked in the panel during this session. Without a pick it
   shows the most relevant one: error > printing > paused > offline > idle (ties: registration
   order).

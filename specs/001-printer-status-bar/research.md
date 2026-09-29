@@ -150,6 +150,9 @@ Fontes: guia oficial (https://plugins.omarchy.org/develop.html), referência do 
 - **Seleção**: `selectedKey` fica no `BarWidget` (sobrevive a abrir e fechar o painel, e se perde
   ao reiniciar o shell). Vazio → `pickHighlighted`. A chave deixa de existir → volta a vazio
   (`Model.resolveSelection`).
+- **Seletor (revisão de 2026-09-29)**: a lista de impressoras virou o `Dropdown` de `qs.Ui`,
+  com `PanelKeyCatcher.blocked` ligado a `popupOpen` para o menu assumir o teclado enquanto está
+  aberto, como o componente documenta.
 - **Ações**: nenhum botão nesta fatia (FR-021). O layout deixa o fim do painel livre para a linha
   de ações da fatia 002 (pausar/retomar, cancelar, parada de emergência, abrir interface web).
 - **Checklist do Princípio VI**: com painel real, clique, Escape e summon/hide passam a ser

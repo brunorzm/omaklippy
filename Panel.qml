@@ -26,8 +26,9 @@ Panel {
   readonly property var selected: panelModel.selected || ({})
 
   readonly property var rows: panelModel.rows || []
+  // The printer dropdown is the only keyboard stop: j/k put the cursor on
+  // it, Enter opens it, and while it is open it owns the keys.
   property bool cursorActive: false
-  property int cursorIndex: 0
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -40,24 +41,8 @@ Panel {
     root.controller.show()
   }
 
-  function selectedRowIndex() {
-    for (var i = 0; i < rows.length; i++) if (rows[i].selected) return i
-    return 0
-  }
-
-  function moveCursor(dy) {
-    if (rows.length === 0) return
-    if (!cursorActive) {
-      cursorActive = true
-      cursorIndex = selectedRowIndex()
-      return
-    }
-    cursorIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex + dy))
-  }
-
-  function selectRow(index) {
-    if (index < 0 || index >= rows.length || !hostWidget) return
-    hostWidget.selectPrinter(rows[index].key)
+  function moveCursor() {
+    if (rows.length > 0) cursorActive = true
   }
 
   function close() {
@@ -123,9 +108,10 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: printerDropdown.popupOpen
       onCloseRequested: root.close()
-      onMoveRequested: function(dx, dy) { root.moveCursor(dy) }
-      onActivateRequested: if (root.cursorActive) root.selectRow(root.cursorIndex)
+      onMoveRequested: root.moveCursor()
+      onActivateRequested: if (root.cursorActive) printerDropdown.open()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
       Flickable {
@@ -160,6 +146,19 @@ Panel {
                 font.pixelSize: Style.font.display
               }
             }
+          }
+
+          Dropdown {
+            id: printerDropdown
+            visible: root.rows.length > 0
+            width: parent.width
+            label: Model.TEXT.panel.printer
+            fontFamily: root.fontFamily
+            options: root.panelModel.options || []
+            value: root.selected.key || ""
+            hasCursor: root.cursorActive
+            onHovered: function(isHovered) { if (isHovered) root.cursorActive = true }
+            onChanged: function(key) { if (root.hostWidget) root.hostWidget.selectPrinter(key) }
           }
 
           Column {
@@ -281,74 +280,6 @@ Panel {
             InfoRow {
               label: Model.TEXT.panel.bed
               value: root.selected.bedText || "—"
-            }
-          }
-
-          PanelSeparator {
-            visible: root.rows.length > 0
-            foreground: root.foreground
-          }
-
-          Column {
-            visible: root.rows.length > 0
-            width: parent.width
-            spacing: Style.space(4)
-
-            PanelSectionHeader {
-              text: Model.TEXT.panel.printers
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Repeater {
-              model: root.rows
-
-              CursorSurface {
-                id: printerRow
-                required property var modelData
-                required property int index
-
-                width: parent.width
-                implicitHeight: Math.max(rowName.implicitHeight, rowState.implicitHeight) + Style.spacing.rowPaddingX
-                foreground: root.foreground
-                current: modelData.selected
-                hasCursor: root.cursorActive && root.cursorIndex === index
-
-                MouseArea {
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onContainsMouseChanged: if (containsMouse) { root.cursorActive = true; root.cursorIndex = printerRow.index }
-                  onClicked: root.selectRow(printerRow.index)
-                }
-
-                Text {
-                  id: rowName
-                  anchors.left: parent.left
-                  anchors.right: rowState.left
-                  anchors.leftMargin: Style.space(10)
-                  anchors.rightMargin: Style.space(10)
-                  anchors.verticalCenter: parent.verticalCenter
-                  elide: Text.ElideRight
-                  textFormat: Text.PlainText
-                  text: printerRow.modelData.displayName
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                }
-
-                Text {
-                  id: rowState
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.space(10)
-                  anchors.verticalCenter: parent.verticalCenter
-                  textFormat: Text.PlainText
-                  text: printerRow.modelData.stateLabel + (printerRow.modelData.percentText ? " " + printerRow.modelData.percentText : "")
-                  color: printerRow.modelData.state === "error" ? root.urgent : root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                }
-              }
             }
           }
 

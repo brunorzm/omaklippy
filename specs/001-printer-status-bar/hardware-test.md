@@ -53,7 +53,9 @@ US3 painel
 
 US4 seletor
   [x] mais relevante ao abrir (Biqu em erro acima da Voron imprimindo; Biqu offline → Voron)
-  [x] troca pelo teclado (j/k + Enter) e pelo mouse
+  [x] troca pelo teclado (j/k + Enter) e pelo mouse (lista, antes da revisão)
+  [x] dropdown "Printer" (revisão de 2026-09-29): abre e troca pelo teclado; Escape fecha só o
+      menu. Pelo mouse: ok (usuário)
   [x] seleção mantida ao reabrir; ícone segue a escolha (decisão de 2026-09-29)
   [s] nomes repetidos
 

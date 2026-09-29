@@ -177,7 +177,9 @@ Casos: imprimindo 42% → `progress 0.42`, `"Voron — printing 42%"`; offline �
 
 Monta o conteúdo do painel ([../data-model.md](../data-model.md#panelmodel-derivado-para-o-painel-buildpanelmodel),
 [display.md](./display.md#painel)). Em `offline`, `freshnessText` é `"no response for 3 min"`;
-fora de offline, `"updated <1 min ago"`. `rows` fica vazio com uma impressora só.
+fora de offline, `"updated <1 min ago"`. `rows` fica vazio com uma impressora só. Cada item de
+`rows` traz `optionLabel` (`"Voron — printing 42%"`, o mesmo texto do tooltip), e `options` é a
+lista `{ value: key, label: optionLabel }` que o dropdown do painel consome.
 
 ### `tidyMessage(text) → string`
 

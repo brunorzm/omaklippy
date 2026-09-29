@@ -53,20 +53,17 @@ impressora escolhida no painel nesta sessão ou, sem escolha, a de `pickHighligh
 ```text
 ┌──────────────────────────────────────┐
 │ [G]  Voron                           │  PanelHero: título = nome
-│      printing · 42%                │             meta = estado · %
+│      PRINTING · 42%                  │             meta = estado · %
+│ Printer                              │  Dropdown (só se > 1 impressora)
+│ [ Voron — printing 42%         ⌄ ]   │    opções: "Biqu B1 — idle", …
 ├──────────────────────────────────────┤
 │ ▓▓▓▓▓▓▓▓░░░░░░░░░░░  42%             │  progresso (só imprimindo/pausada)
-│ hook.gcode                           │
-│ Remaining  1h 02m                     │
-│                                      │
-│ Nozzle 215 / 215 °C                  │
-│ Bed     60 / 60 °C                   │
-│ updated <1 min ago                 │
-│                                      │
-│ PRINTERS                             │  PanelSectionHeader (só se > 1)
-│ ● Voron                  printing 42%│  linha selecionada
-│   Ender (192.168.1.51)          idle │
-│   Ender (ender.local)        offline │
+│ File                     hook.gcode  │
+│ Remaining                    1h 02m  │
+├──────────────────────────────────────┤
+│ Nozzle                  215/215 °C   │
+│ Bed                       60/60 °C   │
+│ updated <1 min ago                   │
 └──────────────────────────────────────┘
 ```
 
@@ -96,8 +93,9 @@ ações da fatia 002.
 | clique esquerdo no ícone | abre ou fecha o painel |
 | clique do meio / direito no ícone | nada nesta fatia |
 | Escape / clique fora | fecha o painel |
-| j/k ou setas no painel | move o cursor na lista de impressoras |
-| Enter / clique numa linha | seleciona a impressora (`selectedKey`) e atualiza o detalhe |
+| j/k ou setas no painel | põe o cursor no dropdown "Printer" |
+| Enter / clique no dropdown | abre o menu; j/k e Enter (ou clique) escolhem a impressora (`selectedKey`) e atualizam o detalhe |
+| Escape com o menu aberto | fecha só o menu; o segundo Escape fecha o painel |
 | Tab / Shift+Tab | passa para o painel vizinho do bar (`switchPanel`), como nos painéis nativos |
 | `omarchy-shell shell summon io.github.brunorzm.omaklippy '{}'` | abre o painel |
 | `omarchy-shell shell hide io.github.brunorzm.omaklippy` | fecha o painel |

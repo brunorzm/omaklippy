@@ -144,6 +144,8 @@ test("buildPanelModel lists every printer in registration order", () => {
   assert.deepEqual(m.rows.map(r => r.displayName), ["Voron", "Ender", "Prusa"])
   assert.deepEqual(m.rows.map(r => r.stateLabel), ["idle", "printing", "offline"])
   assert.deepEqual(m.rows.map(r => r.percentText), ["", "42%", ""])
+  assert.deepEqual(m.rows.map(r => r.optionLabel), ["Voron — idle", "Ender — printing 42%", "Prusa — offline"])
+  assert.deepEqual(m.options, m.rows.map(r => ({ value: r.key, label: r.optionLabel })), "dropdown options")
   assert.deepEqual(m.rows.map(r => r.selected), [false, true, false], "defaults to the highlighted printer")
   assert.equal(m.rows[0].key, printers[0].key)
   assert.equal(m.selected.displayName, "Ender")
@@ -157,7 +159,7 @@ test("buildPanelModel follows a manual selection", () => {
 })
 
 test("buildPanelModel without printers is the empty state", () => {
-  assert.deepEqual(M.buildPanelModel([], {}, "", 0), { empty: true, selected: null, showJob: false, rows: [] })
+  assert.deepEqual(M.buildPanelModel([], {}, "", 0), { empty: true, selected: null, showJob: false, rows: [], options: [] })
 })
 
 test("setupCommand is the exact command shown in the empty panel", () => {

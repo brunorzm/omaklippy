@@ -34,7 +34,7 @@ var TEXT = {
     remaining: "Remaining",
     nozzle: "Nozzle",
     bed: "Bed",
-    printers: "PRINTERS"
+    printer: "Printer"
   }
 }
 
@@ -553,7 +553,7 @@ function detailFor(printer, status, now) {
 
 function buildPanelModel(printers, statusesByKey, selectedKey, now) {
   var list = Array.isArray(printers) ? printers : []
-  if (list.length === 0) return { empty: true, selected: null, showJob: false, rows: [] }
+  if (list.length === 0) return { empty: true, selected: null, showJob: false, rows: [], options: [] }
   var key = resolveSelection(selectedKey, list, statusesByKey)
   var printer = list[0]
   for (var i = 0; i < list.length; i++) if (list[i].key === key) printer = list[i]
@@ -568,11 +568,15 @@ function buildPanelModel(printers, statusesByKey, selectedKey, now) {
         state: st.state,
         stateLabel: stateLabel(st.state),
         percentText: hasJob(st.state) && finiteOrNull(st.percent) !== null ? st.percent + "%" : "",
+        optionLabel: summaryLine(list[j], st),
         selected: list[j].key === key
       })
     }
   }
-  return { empty: false, selected: selected, showJob: hasJob(selected.state), rows: rows }
+  // The printer dropdown takes { value, label } items.
+  var options = []
+  for (var k = 0; k < rows.length; k++) options.push({ value: rows[k].key, label: rows[k].optionLabel })
+  return { empty: false, selected: selected, showJob: hasJob(selected.state), rows: rows, options: options }
 }
 
 if (typeof module !== "undefined") {
