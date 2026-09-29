@@ -60,17 +60,20 @@ Derivado na carga (`normalizePrinters`):
 | `pending` | bool | Há requisição em voo para esta impressora. |
 | `seq` | inteiro | Número da última requisição disparada. |
 
-Estado inicial (antes da 1ª resposta): `state: "offline"`, `reason: "aguardando primeira
+Estado inicial (antes da 1ª resposta, `initialStatus`): `state: "offline"`, `reason: "aguardando primeira
 resposta"`, `offlineSince: null`. Assim nunca aparece dado não confirmado.
 
 ### Transições
 
 ```text
-disparo do ciclo:  pending=false → seq++, pending=true, inicia Process(seq)
-                   pending=true  → não dispara (FR-012; timeout > intervalo)
-Process termina:   seq da resposta ≠ seq atual → descarta
-                   senão → reading = parseResponse(...); status = applyReading(status, reading, now)
-guarda (timeout+1s): mata o Process; applyReading(status, {reachable:false, "sem resposta"}, now)
+mudança de config:  statuses = reconcileStatuses(statuses, printers)
+disparo do ciclo:   { statuses, requests } = planDispatch(statuses, printers, timeoutMs)
+                    → para cada request: seq++, pending=true, inicia Process(key, seq)
+                    impressoras pendentes não geram request (FR-012; timeout > intervalo)
+Process termina:    statuses = acceptResult(statuses, key, seq, parseResponse(...), now)
+                    (ignorado se seq ≠ atual ou pending já é false)
+guarda (timeout+1s): mata o Process;
+                    statuses = acceptResult(statuses, key, seq, {reachable:false, "sem resposta"}, now)
 ```
 
 `applyReading(prev, reading, now)`:

@@ -113,6 +113,39 @@ Transições em [../data-model.md](../data-model.md#transições). Em `offline`:
 `percent`, `remainingSec`, `filename`, `nozzle` e `bed` (FR-009) e preserva `offlineSince` se já
 estava offline.
 
+## Motor de consulta
+
+Estas funções tiram do QML toda a decisão de estado do polling (Princípio V). `statuses` é um
+objeto `{ [key]: PrinterStatus }`. Nenhuma delas altera a entrada: sempre devolvem um objeto novo,
+ou o **mesmo** objeto quando não há mudança, para o QML poder comparar por identidade.
+
+### `initialStatus(key) → PrinterStatus`
+
+`{ key, state: "offline", reason: "aguardando primeira resposta", percent: null,
+remainingSec: null, filename: "", nozzle: null, bed: null, lastSeenAt: null,
+offlineSince: null, pending: false, seq: 0 }`
+
+### `reconcileStatuses(statuses, printers) → statuses`
+
+- Chave presente em `printers` e em `statuses` → mantém o status.
+- Chave nova → `initialStatus(key)`; se a impressora tem `invalidReason`, o status é offline com
+  esse motivo.
+- Chave em `statuses` que não está mais em `printers` → removida.
+
+### `planDispatch(statuses, printers, timeoutMs) → { statuses, requests }`
+
+- Para cada impressora válida (sem `invalidReason`) cujo status tem `pending: false`: `seq + 1`,
+  `pending: true` e um item `{ key, seq, args: buildCurlArgs(buildQueryUrl(baseUrl), ceil(timeoutMs/1000)) }`
+  em `requests`.
+- Impressoras pendentes ou inválidas não geram requisição.
+
+### `acceptResult(statuses, key, seq, reading, now) → statuses`
+
+- Aplica `applyReading(status, reading, now)` e marca `pending: false` **somente** se a chave
+  existe, `status.pending === true` e `status.seq === seq`.
+- Qualquer outro caso (chave removida, seq antigo, segundo resultado com o mesmo seq, por exemplo
+  o `onExited` que chega depois da guarda de timeout) → devolve `statuses` inalterado (FR-012).
+
 ## Visão
 
 ### `pickHighlighted(statuses) → PrinterStatus | null`
