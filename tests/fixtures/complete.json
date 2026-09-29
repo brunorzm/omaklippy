@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\":{\"eventtime\":6852.974323452,\"status\":{\"webhooks\":{\"state\":\"ready\",\"state_message\":\"Printer is ready\"},\"print_stats\":{\"filename\":\"CleanWalk_Duo_2025_12_31_assembly_brimmed_ABS_22m23s.gcode\",\"total_duration\":1918.8542302079995,\"print_duration\":1355.1068665439998,\"filament_used\":6683.998220000062,\"state\":\"complete\",\"message\":\"\",\"info\":{\"total_layer\":null,\"current_layer\":null}},\"virtual_sdcard\":{\"file_path\":null,\"progress\":1.0,\"is_active\":false,\"file_position\":1145109,\"file_size\":1145109},\"display_status\":{\"progress\":1.0,\"message\":\"Imprimindo\"},\"extruder\":{\"temperature\":235.06,\"target\":0.0},\"heater_bed\":{\"temperature\":109.76,\"target\":0.0}}}}\n200"
+}

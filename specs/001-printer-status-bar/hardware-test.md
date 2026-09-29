@@ -17,7 +17,7 @@ Legenda: [x] verificado · [~] verificado com o Moonraker falso local (fixtures)
 impressora real · [ ] pendente.
 
 ```text
-US1 ícone:    [x] ociosa (Voron real)  [x] imprimindo (Voron real, aquecendo a câmara: 0%)  [~] pausada  [ ] fim/cancelado  [ ] troca de tema
+US1 ícone:    [x] ociosa (Voron real)  [x] imprimindo (Voron real, aquecendo a câmara: 0%)  [~] pausada  [x] fim (Voron real: `complete` → ociosa)  [ ] cancelado  [x] troca de tema (Catppuccin Latte e Tokyo Night: ícone, selo vermelho de erro e painel acompanham)
               [x] barra vertical (com o Moonraker falso)
 US2 falhas:   [x] desligada (Biqu B1 na tomada: offline em ≤ 8 s, sem dados antigos, volta sozinha como erro)  [ ] Wi-Fi  [~] sem resposta (servidor travado)  [x] endereço inexistente
               [x] shutdown real do MCU (Biqu B1: termistor do bico fora da faixa; ícone com selo e mensagem do Klipper legível no painel)  [ ] M112  [x] klipper parado (503 real na Biqu B1: "Klippy Host not connected", sem temperaturas)  [x] 401 real (Biqu B1 sem 192.168.0.0/16 em trusted_clients)  [x] curl ausente (binário inexistente)
@@ -33,18 +33,20 @@ Desempenho:   [x] 5 impressoras (3 inexistentes): no máximo 3 curl simultâneos
 
 ## Pendências para concluir a fatia
 
-1. Na Voron: pausa/retomada (opcional, mexe na impressão real) e o fim da impressão → ociosa.
+1. Na Voron: pausa/retomada e cancelamento (opcionais, mexem numa impressão real).
 2. `FIRMWARE_RESTART` na Biqu → volta a ociosa.
 4. Desligar o Wi-Fi do computador → tudo offline e volta sozinho (fazer por último; derruba a sessão do assistente).
-7. Trocar o tema do Omarchy e conferir o ícone.
-9. Capturar as fixtures reais que faltam (T048): `paused`, `complete`, `cancelled`, `startup`.
-   Já reais: `standby`, `printing`, `shutdown`, `klippy-disconnected`, `unauthorized`.
+9. Capturar as fixtures reais que faltam (T048): `paused`, `cancelled`, `startup`.
+   Já reais: `standby`, `printing`, `complete`, `shutdown`, `klippy-disconnected`, `unauthorized`.
 
-10. **Investigar**: depois de reconectar o monitor externo, a instância do widget no monitor do
-    notebook ficou com as configurações vazias ("nenhuma impressora configurada"), embora o
-    `shell.json` e o `listShellConfig` do shell tivessem as impressoras. Reiniciar o shell
-    resolveu. Reproduzir desconectando e reconectando o monitor e ver se o problema é do repasse
-    de `settings` do shell (provável) ou do widget.
+10. ~~Investigar configurações vazias depois de reconectar o monitor~~ **Diagnosticado (bug do
+    Omarchy 4.0.4)**: `Bar.applySettingsDelta` aplica mudanças de configuração só nos widgets em
+    execução. Widgets criados depois, quando um monitor é reconectado, recebem as configurações
+    da última reconstrução completa da barra (`ModuleSlot.moduleSettings =
+    entrySettings(entry)`). Reproduzido: com a Biqu renomeada ao vivo para "Biqu B1 (teste)",
+    depois de reconectar o monitor a instância recriada mostrou "Biqu B1", embora o `shell.json`
+    e o `listShellConfig` tivessem o nome novo. Contorno: `omarchy-restart-shell` depois de mudar
+    configurações. Não é corrigível no plugin.
 
 Observações: o tema em uso tem `urgent` = `#565d60` (cinza), por isso o erro ganhou um selo além
 da cor.

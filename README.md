@@ -56,7 +56,12 @@ omarchy bar set io.github.brunorzm.omaklippy timeoutSec 5 --json
 > repassa até reiniciar (`omarchy-restart-shell`). Editar o `shell.json` diretamente é sempre
 > aplicado na hora.
 
-#> **Atenção:** `omarchy plugin disable` remove a entrada do widget do `shell.json`, junto com
+#> **Monitores reconectados:** no Omarchy 4.0.4, um widget recriado quando um monitor é
+> conectado recebe as configurações da última vez que a barra foi montada por completo, não as
+> mais recentes. Se você mudou as impressoras com o shell rodando e depois conectou um monitor,
+> rode `omarchy-restart-shell`.
+
+> **Atenção:** `omarchy plugin disable` remove a entrada do widget do `shell.json`, junto com
 > as impressoras cadastradas. Ao reabilitar, cadastre-as de novo.
 
 ## Moonraker

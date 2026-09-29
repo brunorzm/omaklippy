@@ -140,3 +140,10 @@ test("real BIQU capture in MCU shutdown: error with Klipper's message", () => {
   assert.match(d.reason, /^MCU 'mcu' shutdown: ADC out of range/)
   assert.equal(r.nozzle.current, -87.76, "keeps the faulty reading, which is the point")
 })
+
+test("real Voron capture right after the print finished (complete) → idle", () => {
+  const r = parse("complete")
+  assert.equal(r.printState, "complete")
+  assert.deepEqual(M.deriveState(r), { state: "idle", reason: "" })
+  assert.equal(M.computePercent("idle", r.progress), null)
+})

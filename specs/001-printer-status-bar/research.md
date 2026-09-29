@@ -95,7 +95,9 @@ Fontes: guia oficial (https://plugins.omarchy.org/develop.html), referência do 
   ([contracts/settings.md](./contracts/settings.md#como-o-usuário-cadastra-documentado-no-readme)).
   Além disso, o hot reload do shell não recarrega de forma confiável o `BarWidget.qml`/`Model.js`
   de um plugin de terceiros, então é preciso rodar `omarchy-restart-shell` depois de cada mudança
-  durante o desenvolvimento.
+  durante o desenvolvimento. Um terceiro bug: widgets recriados na reconexão de um monitor
+  recebem as configurações da última montagem completa da barra, não as atualizadas ao vivo
+  (detalhes em [hardware-test.md](./hardware-test.md), item 10).
 
 ## R6. Normalização de endereço
 

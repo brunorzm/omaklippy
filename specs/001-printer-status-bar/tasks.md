@@ -160,7 +160,7 @@ fechar pelas três formas ([quickstart.md §4 US3](./quickstart.md#4-cenários-p
 - [X] T033 [US3] Implementar `formatTemp`, `formatDuration`, `formatAgo`, `resolveSelection` e `buildPanelModel` (campos `empty`, `selected`, `showJob`; `rows` sempre `[]` por enquanto) em `Model.js` para T032 passar
 - [X] T034 [US3] Criar `Panel.qml`: raiz `Panel` (qs.Ui) com `moduleName: "io.github.brunorzm.omaklippy"`, `manageIpc: false`, as propriedades injetáveis `anchorItem` e `hostWidget`; `open()`/`close()` via `root.controller.show()`/`hide()`; um `KeyboardPanel` (`anchorItem`, `owner: root`, `bar: root.bar`, `open: root.opened`, `focusTarget: keyCatcher`, `contentWidth: panel.fittedContentWidth(Style.space(360))`, `contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(560))`) contendo `PanelKeyCatcher` (`onCloseRequested: root.close()`, `onTabRequested: root.switchPanel(direction)`) → `Flickable` → `Column` com: `PanelHero` (título = nome, `meta` = "estado · N%", `detail` = motivo, `iconComponent` com o glifo), bloco de impressão (barra de progresso com %, arquivo, "Restante") visível só com `showJob`, temperaturas ("Bico", "Mesa") e a linha de atualização; o conteúdo vem de `hostWidget.panelModel`; seguir `tailscale/Panel.qml:403-470` como referência de estrutura e estilo
 - [X] T035 [US3] Em `BarWidget.qml`, implementar o contrato de painel do guia: `Loader { id: panelLoader; source: Qt.resolvedUrl("Panel.qml"); onLoaded: { injectPanel(); Qt.callLater(injectPanel) } }`, `injectPanel()` (bar, settings, anchorItem = button, hostWidget = root), `onBarChanged`/`onSettingsChanged: injectPanel()`, `readonly property bool opened`, `readonly property bool popoutSwitchClosing`, `open()`, `close()`, `toggle()`, `closeForPopoutSwitch()` repassados ao painel; `onPressed` do botão: botão esquerdo → `toggle()`, os outros não fazem nada; `readonly property var panelModel: Model.buildPanelModel(config.printers, statuses, "", now)`, com `property real now` atualizado por um `Timer` de 15 s ativo só com `opened`
-- [ ] T036 [US3] Rodar o gate (qmllint com `BarWidget.qml` e `Panel.qml`), os cenários de US3 do quickstart e os passos Clique, Escape, Summon, Hide e Troca de painel do checklist de ciclo de vida ([quickstart.md §5](./quickstart.md#5-checklist-de-ciclo-de-vida-princípio-vi))
+- [X] T036 [US3] Rodar o gate (qmllint com `BarWidget.qml` e `Panel.qml`), os cenários de US3 do quickstart e os passos Clique, Escape, Summon, Hide e Troca de painel do checklist de ciclo de vida ([quickstart.md §5](./quickstart.md#5-checklist-de-ciclo-de-vida-princípio-vi))
 
 **Checkpoint**: o painel abre, mostra os detalhes e fecha como os painéis nativos.
 
@@ -183,7 +183,7 @@ seleção por mouse e teclado, fechar e reabrir ([quickstart.md §4 US4](./quick
 - [X] T038 [US4] Implementar `disambiguateNames` (chamado por `normalizePrinters`), `resolveSelection` completo e `rows` em `buildPanelModel` em `Model.js` para T037 passar
 - [X] T039 [US4] Em `BarWidget.qml`: `property string selectedKey: ""` (só em memória, nunca gravado), `function selectPrinter(key)`, zerar `selectedKey` quando a chave deixa de existir em `config.printers`, e passar `selectedKey` para `buildPanelModel`
 - [X] T040 [US4] Em `Panel.qml`: `PanelSectionHeader` "Impressoras" e um `Repeater` sobre `panelModel.rows` (visível só com `rows.length > 0`), com cada linha mostrando `displayName` à esquerda e "estado N%" à direita, a linha selecionada destacada com `Style.selectedFill`/tokens nativos, clique → `hostWidget.selectPrinter(key)`; cursor de teclado com `PanelKeyCatcher.onMoveRequested` (j/k/setas) e `onActivateRequested` (Enter) seguindo o padrão de cursor do `tailscale/Panel.qml`
-- [ ] T041 [US4] Rodar o gate e os cenários de US4 do quickstart
+- [X] T041 [US4] Rodar o gate e os cenários de US4 do quickstart
 
 **Checkpoint**: várias impressoras são navegáveis no painel.
 
@@ -219,7 +219,7 @@ sem reiniciar ([quickstart.md §4 US5](./quickstart.md#4-cenários-por-história
 - [X] T049 [P] Auditoria do Princípio VIII: `grep -nE '#[0-9a-fA-F]{3,8}|Qt\.rgba|Qt\.rgb|font\.family *: *"|pixelSize *: *[0-9]' BarWidget.qml Panel.qml` sem resultados, e corrigir o que aparecer
 - [X] T050 [P] Auditoria do Princípio I: `moduleName` igual ao id do manifest em `BarWidget.qml` e `Panel.qml`; `grep -rn "omarchy.clock" --include=*.qml .` vazio; `find . -type l -not -path './.git/*'` vazio
 - [X] T051 Verificar SC-007: cadastrar 5 impressoras (3 inexistentes), confirmar no máximo 5 `curl` simultâneos por instância, o painel abrindo sem atraso e o log limpo
-- [ ] T052 Executar o checklist de ciclo de vida completo ([quickstart.md §5](./quickstart.md#5-checklist-de-ciclo-de-vida-princípio-vi)), incluindo desabilitar com o painel aberto, reabilitar, `omarchy-restart-shell` e remover (reinstalar em seguida)
+- [X] T052 Executar o checklist de ciclo de vida completo ([quickstart.md §5](./quickstart.md#5-checklist-de-ciclo-de-vida-princípio-vi)), incluindo desabilitar com o painel aberto, reabilitar, `omarchy-restart-shell` e remover (reinstalar em seguida)
 - [ ] T053 Executar o quickstart inteiro numa impressora real e registrar o resultado no bloco de [quickstart.md §6](./quickstart.md#6-registro-do-teste-em-hardware-princípio-vii), salvo em `specs/001-printer-status-bar/hardware-test.md` (Princípio VII)
 
 ---
