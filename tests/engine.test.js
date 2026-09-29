@@ -90,3 +90,53 @@ test("guard fires → offline; a late onExited with the same seq is ignored", ()
   assert.equal(guarded[key].reason, "no response (timeout)")
   assert.equal(M.acceptResult(guarded, key, 1, reading("printing.synthetic"), 4100), guarded)
 })
+
+// ---- Slice 002: a fresh query right after a command (followUp)
+
+test("initialStatus starts without a follow-up", () => {
+  assert.equal(M.initialStatus("k").followUp, false)
+})
+
+test("requestFollowUp marks a pending query and leaves anything else untouched", () => {
+  const ps = printers()
+  const idle = M.reconcileStatuses({}, ps)
+  assert.equal(M.requestFollowUp(idle, ps[0].key), idle, "no query in flight")
+  assert.equal(M.requestFollowUp(idle, "gone#9"), idle)
+  const flying = M.planDispatch(idle, ps, 3000).statuses
+  const marked = M.requestFollowUp(flying, ps[0].key)
+  assert.notEqual(marked, flying)
+  assert.equal(marked[ps[0].key].followUp, true)
+  assert.equal(flying[ps[0].key].followUp, false, "input untouched")
+  assert.equal(M.requestFollowUp(marked, ps[0].key), marked, "already marked")
+})
+
+test("planDispatch with onlyKey asks just that printer and clears its follow-up", () => {
+  const ps = printers()
+  const s = M.reconcileStatuses({}, ps)
+  const one = M.planDispatch(s, ps, 3000, ps[1].key)
+  assert.deepEqual(one.requests.map(r => r.key), [ps[1].key])
+  assert.equal(one.statuses[ps[0].key].pending, false)
+  assert.equal(one.statuses[ps[1].key].followUp, false)
+  // Never two queries in flight for the same printer.
+  assert.equal(M.planDispatch(one.statuses, ps, 3000, ps[1].key).requests.length, 0)
+})
+
+test("acceptResult keeps the follow-up mark, and the next dispatch clears it", () => {
+  const ps = printers()
+  const key = ps[0].key
+  const flying = M.planDispatch(M.reconcileStatuses({}, ps), ps, 3000, key)
+  const marked = M.requestFollowUp(flying.statuses, key)
+  const done = M.acceptResult(marked, key, 1, reading("standby"), 5000)
+  assert.equal(done[key].followUp, true)
+  assert.equal(done[key].pending, false)
+  const again = M.planDispatch(done, ps, 3000, key)
+  assert.equal(again.requests.length, 1)
+  assert.equal(again.statuses[key].followUp, false)
+})
+
+test("follow-up helpers never throw", () => {
+  for (const v of [null, undefined, {}, "lixo"]) {
+    assert.doesNotThrow(() => M.requestFollowUp(v, v))
+    assert.doesNotThrow(() => M.planDispatch(v, v, v, v))
+  }
+})

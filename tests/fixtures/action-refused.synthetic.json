@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"error\":{\"code\":400,\"message\":\"Macro CANCEL_PRINT failed:\\nheater not ready\"}}\n400"
+}

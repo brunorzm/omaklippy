@@ -25,3 +25,21 @@ jq -n --argjson e "$code" --arg s "$out" '{exitCode: $e, stdout: $s}' > tests/fi
 
 Use `printf '%s' "$out"` rather than `echo "$out"` if you pipe the output elsewhere: zsh's `echo`
 turns the `\n` escapes inside JSON strings into real newlines and breaks the JSON.
+
+## Action fixtures
+
+`action-*` fixtures are the raw output of one action `POST` (pause, resume, cancel, emergency
+stop), in the same `{ exitCode, stdout }` format. The network failures above (`refused`, `dns`,
+`timeout`, `unauthorized`) are reused for actions too, since the transport is the same.
+
+Capture command (pause shown):
+
+```bash
+out=$(curl -sS -X POST --connect-timeout 3 --max-time 60 -H 'Accept: application/json' -w '\n%{http_code}' \
+  "http://$PRINTER/printer/print/pause")
+code=$?
+jq -n --argjson e "$code" --arg s "$out" '{exitCode: $e, stdout: $s}' > tests/fixtures/action-ok.json
+```
+
+**Warning**: this really pauses the printer. Only the printer's owner runs it, never an
+automated tool.

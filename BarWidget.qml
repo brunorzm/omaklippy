@@ -21,9 +21,13 @@ BarWidget {
   // { [printerKey]: PrinterStatus }, always replaced, never mutated, so
   // bindings on it re-evaluate.
   property var statuses: ({})
+  // { [printerKey]: PrinterCommands }: running pause/resume/cancel and
+  // emergency-stop commands plus the last failure, replaced like statuses.
+  property var commands: ({})
 
   function syncConfig() {
     statuses = Model.reconcileStatuses(statuses, config.printers)
+    commands = Model.reconcileCommands(commands, config.printers)
     // A removed printer drops the manual choice for good, so it does not
     // come back if an entry with the same key is added later.
     if (selectedKey !== "" && Model.resolveSelection(selectedKey, config.printers, statuses) !== selectedKey)
@@ -35,7 +39,13 @@ BarWidget {
   }
 
   function refresh() {
-    var plan = Model.planDispatch(statuses, config.printers, config.timeoutMs)
+    dispatch("")
+  }
+
+  // onlyKey "" asks every printer; a key asks just that one (after a
+  // printer command). Printers with a query in flight are skipped.
+  function dispatch(onlyKey) {
+    var plan = Model.planDispatch(statuses, config.printers, config.timeoutMs, onlyKey)
     statuses = plan.statuses
     for (var i = 0; i < plan.requests.length; i++) {
       var r = plan.requests[i]
@@ -45,8 +55,33 @@ BarWidget {
 
   function accept(key, seq, reading) {
     statuses = Model.acceptResult(statuses, key, seq, reading, Date.now())
+    // This answer may predate a command that finished meanwhile.
+    if (statuses[key] && statuses[key].followUp === true) dispatch(key)
   }
 
+  // Sends one printer action. key is the printer the panel showed when the
+  // user acted, so the target never shifts under a confirmation.
+  function runAction(key, action) {
+    var printer = null
+    for (var i = 0; i < config.printers.length; i++)
+      if (config.printers[i].key === key) printer = config.printers[i]
+    var plan = Model.planCommand(commands, printer, statuses[key], action, config.timeoutMs, Date.now())
+    commands = plan.commands
+    var r = plan.request
+    if (r && r.args.length > 0)
+      commandComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: r.guardMs })
+  }
+
+  // Success or failure, the printer is asked again right away so the panel
+  // shows what the command did without waiting for the next cycle.
+  function acceptCommand(key, seq, result) {
+    commands = Model.acceptCommandResult(commands, key, seq, result)
+    statuses = Model.requestFollowUp(statuses, key)
+    dispatch(key)
+  }
+
+  // Stops status queries and printer commands alike; both live in
+  // requestHolder and carry their printer key.
   function stopRequests(onlyMissing) {
     var list = requestHolder.children
     for (var i = list.length - 1; i >= 0; i--) {
@@ -58,7 +93,7 @@ BarWidget {
   //      Bar.findPanelWidget requires open/close/opened on the bar-widget root.
   property string selectedKey: ""
   property real now: Date.now()
-  readonly property var panelModel: Model.buildPanelModel(config.printers, statuses, selectedKey, now)
+  readonly property var panelModel: Model.buildPanelModel(config.printers, statuses, selectedKey, now, commands)
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   // Forwarded so this widget can stand in for the panel as the bar's popout
   // identity: Bar.requestPopout prefers closeForPopoutSwitch over close, and
@@ -84,6 +119,7 @@ BarWidget {
   // Session-only: never written to shell.json.
   function selectPrinter(key) {
     selectedKey = String(key || "")
+    commands = Model.clearFailures(commands)
   }
 
   function panelOpened() {
@@ -215,6 +251,78 @@ BarWidget {
         running: true
         // Same outcome as curl giving up on its own (exit 28).
         onTriggered: request.complete(Model.parseResponse("", 28))
+      }
+    }
+  }
+
+  Component {
+    id: commandComponent
+
+    // One printer action (POST). Same lifecycle as a query: exactly one
+    // result reaches Model.acceptCommandResult, from curl or from the guard.
+    Item {
+      id: job
+      required property string key
+      required property int seq
+      required property var args
+      required property int guardMs
+
+      property bool finished: false
+      property bool launched: false
+      property bool exited: false
+      property bool drained: false
+      property int exitCode: -1
+      property string output: ""
+
+      function complete(result) {
+        if (finished) return
+        finished = true
+        commandGuard.stop()
+        commandProc.running = false
+        root.acceptCommand(key, seq, result)
+        job.destroy()
+      }
+
+      function stop() {
+        finished = true
+        commandGuard.stop()
+        commandProc.running = false
+        job.destroy()
+      }
+
+      function tryComplete() {
+        if (exited && drained) complete(Model.parseActionResponse(output, exitCode))
+      }
+
+      Process {
+        id: commandProc
+        command: job.args
+        running: true
+        onStarted: job.launched = true
+        onRunningChanged: {
+          if (!running && !job.launched && !job.finished)
+            job.complete(Model.parseActionResponse("", -1))
+        }
+        stdout: StdioCollector {
+          waitForEnd: true
+          onStreamFinished: {
+            job.output = String(text || "")
+            job.drained = true
+            job.tryComplete()
+          }
+        }
+        onExited: function(exitCode) {
+          job.exitCode = exitCode
+          job.exited = true
+          job.tryComplete()
+        }
+      }
+
+      Timer {
+        id: commandGuard
+        interval: job.guardMs
+        running: true
+        onTriggered: job.complete(Model.parseActionResponse("", 28))
       }
     }
   }

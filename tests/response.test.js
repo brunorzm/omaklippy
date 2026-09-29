@@ -101,6 +101,7 @@ test("initialStatus is offline, waiting for the first answer", () => {
     offlineSince: null,
     pending: false,
     seq: 0,
+    followUp: false, // slice 002: fresh query after a printer command
   })
 })
 

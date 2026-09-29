@@ -159,7 +159,9 @@ test("buildPanelModel follows a manual selection", () => {
 })
 
 test("buildPanelModel without printers is the empty state", () => {
-  assert.deepEqual(M.buildPanelModel([], {}, "", 0), { empty: true, selected: null, showJob: false, rows: [], options: [] })
+  // Slice 002 adds the (empty) actions block to every panel model.
+  assert.deepEqual(M.buildPanelModel([], {}, "", 0), { empty: true, selected: null, showJob: false, rows: [], options: [],
+    actions: { buttons: [], primary: [], emergency: null, failureText: "", filename: "" } })
 })
 
 test("setupCommand is the exact command shown in the empty panel", () => {
@@ -185,4 +187,56 @@ test("buildPanelModel tidies the real BIQU shutdown message", () => {
       "Once the underlying issue is corrected, use the \"FIRMWARE_RESTART\" command to reset the firmware, " +
       "reload the config, and restart the host software. Printer is shutdown",
   ])
+})
+
+// ---- Slice 002: actions in the panel model and the keyboard cursor
+
+test("buildPanelModel without commands still carries the selected printer's actions", () => {
+  const { printers, statuses } = fleet()
+  const m = M.buildPanelModel(printers, statuses, "", 1000)
+  assert.equal(m.selected.displayName, "Ender")
+  assert.deepEqual(m.actions.buttons.map(b => b.id), ["pause", "cancel", "emergencyStop"])
+  assert.equal(m.actions.failureText, "")
+})
+
+test("buildPanelModel uses the commands of the selected printer only", () => {
+  const { printers, statuses } = fleet()
+  const ender = printers[1]
+  const running = M.planCommand({}, ender, statuses[ender.key], "pause", 3000, 1).commands
+  const m = M.buildPanelModel(printers, statuses, ender.key, 1000, running)
+  assert.deepEqual(m.actions, M.buildActionsModel(ender, statuses[ender.key], running[ender.key]))
+  assert.equal(m.actions.primary[0].busy, true)
+  const other = M.buildPanelModel(printers, statuses, printers[0].key, 1000, running)
+  assert.deepEqual(other.actions.buttons.map(b => [b.id, b.busy]), [["emergencyStop", false]])
+})
+
+test("cursorStops lists the dropdown and the enabled buttons in reading order", () => {
+  const { printers, statuses } = fleet()
+  const m = M.buildPanelModel(printers, statuses, printers[1].key, 1000)
+  assert.deepEqual(M.cursorStops(m), ["printer", "pause", "cancel", "emergencyStop"])
+  const one = single("printing.synthetic", 1000)
+  assert.deepEqual(M.cursorStops(M.buildPanelModel(one.printers, one.statuses, "", 1000)), ["pause", "cancel", "emergencyStop"])
+  const running = M.planCommand({}, printers[1], statuses[printers[1].key], "pause", 3000, 1).commands
+  const busy = M.buildPanelModel(printers, statuses, printers[1].key, 1000, running)
+  assert.deepEqual(M.cursorStops(busy), ["printer", "emergencyStop"], "disabled buttons are skipped")
+  assert.deepEqual(M.cursorStops(M.buildPanelModel([], {}, "", 0)), [])
+})
+
+test("stepCursor moves without wrapping and recovers from a stop that left", () => {
+  const stops = ["printer", "pause", "cancel", "emergencyStop"]
+  assert.equal(M.stepCursor(stops, "", 1), "printer")
+  assert.equal(M.stepCursor(stops, "", -1), "printer")
+  assert.equal(M.stepCursor(stops, "printer", 1), "pause")
+  assert.equal(M.stepCursor(stops, "cancel", -1), "pause")
+  assert.equal(M.stepCursor(stops, "emergencyStop", 1), "emergencyStop")
+  assert.equal(M.stepCursor(stops, "printer", -1), "printer")
+  assert.equal(M.stepCursor(stops, "resume", 1), "printer", "a button that went away")
+  assert.equal(M.stepCursor([], "pause", 1), "")
+})
+
+test("panel cursor functions never throw", () => {
+  for (const v of [null, undefined, {}, "lixo"]) {
+    assert.deepEqual(M.cursorStops(v), [])
+    assert.equal(typeof M.stepCursor(v, v, v), "string")
+  }
 })

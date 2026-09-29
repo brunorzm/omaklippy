@@ -35,15 +35,55 @@ var TEXT = {
     nozzle: "Nozzle",
     bed: "Bed",
     printer: "Printer"
-  }
+  },
+  actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop" },
+  confirm: {
+    back: "Back",
+    cancelPrint: "Cancel print",
+    stop: "Stop",
+    cancelMessage: "Cancel the print \"%1\" on %2?",
+    cancelMessageNoFile: "Cancel the current print on %1?",
+    emergencyMessage: "Emergency stop %1? Klipper will shut down until a firmware restart."
+  },
+  actionFailed: "%1 failed: %2",
+  commandTimeout: "no response (timeout) — check the printer before trying again"
 }
 
-function fill(template, value) {
-  return template.replace("%1", String(value))
+// %1 and %2 are replaced in one pass, so a value that itself contains "%2"
+// (a file name, say) is never substituted again.
+function fill(template, a, b) {
+  var values = [a, b]
+  return String(template).replace(/%([12])/g, function(match, n) {
+    var v = values[Number(n) - 1]
+    return v === undefined ? match : String(v)
+  })
 }
 
 var DEFAULT_INTERVAL_SEC = 5
 var DEFAULT_TIMEOUT_SEC = 3
+
+// Printer actions: Moonraker endpoint, whether the panel asks first, and the
+// slot a running command takes. The emergency stop has a slot of its own so
+// it stays available while a slow pause/resume/cancel macro runs.
+var ACTIONS = {
+  pause: { path: "/printer/print/pause", confirm: false, slot: "busy" },
+  resume: { path: "/printer/print/resume", confirm: false, slot: "busy" },
+  cancel: { path: "/printer/print/cancel", confirm: true, slot: "busy" },
+  emergencyStop: { path: "/printer/emergency_stop", confirm: true, slot: "estop" }
+}
+
+// Nerd Font glyphs from the bar's icon font.
+var ACTION_GLYPHS = {
+  pause: "\u{f03e4}",          // nf-md-pause
+  resume: "\u{f040a}",         // nf-md-play
+  cancel: "\u{f04db}",         // nf-md-stop
+  emergencyStop: "\u{f0028}",  // nf-md-alert_octagon
+  busy: "\u{f0772}"            // nf-md-loading
+}
+
+// Macros behind pause/resume/cancel can park, wait for moves and reheat, so
+// commands get far more time than a status query (whose maximum is 30 s).
+var COMMAND_TIMEOUT_SEC = 60
 
 var QUERY_PATH = "/printer/objects/query?webhooks&print_stats&virtual_sdcard&display_status" +
   "&extruder=temperature,target&heater_bed=temperature,target"
@@ -194,6 +234,17 @@ function buildCurlArgs(url, timeoutSec) {
     "-H", "Accept: application/json", "-w", "\n%{http_code}", url]
 }
 
+function isAction(action) {
+  return typeof action === "string" && ACTIONS.hasOwnProperty(action)
+}
+
+function buildActionArgs(baseUrl, action, connectTimeoutSec) {
+  if (typeof baseUrl !== "string" || baseUrl === "" || !isAction(action)) return []
+  var c = Math.max(1, Math.ceil(finiteOrNull(connectTimeoutSec) || DEFAULT_TIMEOUT_SEC))
+  return ["curl", "-sS", "-X", "POST", "--connect-timeout", String(c), "--max-time", String(COMMAND_TIMEOUT_SEC),
+    "-H", "Accept: application/json", "-w", "\n%{http_code}", baseUrl + ACTIONS[action].path]
+}
+
 // ---- Response
 
 function emptyReading() {
@@ -230,39 +281,49 @@ var CURL_OFFLINE_MESSAGES = {
 
 // stdout is the raw curl output: body, "\n", then the %{http_code} line.
 // The curl exit code is checked first (the code line reads 000 without a
-// response), then the HTTP status, then the body.
-function parseResponse(stdout, exitCode) {
-  var r = emptyReading()
+// response), then the HTTP status. Shared by status queries and actions;
+// errorMessage is empty only for a usable 1xx–3xx answer.
+function readTransport(stdout, exitCode) {
   var exit = typeof exitCode === "number" ? exitCode : -1
+  var t = { reachable: true, httpStatus: 0, errorMessage: "", data: null }
 
   if (exit === -1 || exit === 127) {
-    r.errorMessage = TEXT.curlNotFound
-    return r
+    t.errorMessage = TEXT.curlNotFound
+    return t
   }
   if (exit !== 0) {
-    r.reachable = false
-    r.errorMessage = CURL_OFFLINE_MESSAGES[exit] || fill(TEXT.networkError, exit)
-    return r
+    t.reachable = false
+    t.errorMessage = CURL_OFFLINE_MESSAGES[exit] || fill(TEXT.networkError, exit)
+    return t
   }
 
   var text = typeof stdout === "string" ? stdout : ""
   var cut = text.lastIndexOf("\n")
   var body = cut < 0 ? "" : text.slice(0, cut)
   var code = Number(cut < 0 ? text.trim() : text.slice(cut + 1).trim())
-  r.httpStatus = isFinite(code) ? code : 0
+  t.httpStatus = isFinite(code) ? code : 0
 
-  var data = null
-  try { data = JSON.parse(body) } catch (e) { data = null }
+  try { t.data = JSON.parse(body) } catch (e) { t.data = null }
 
-  if (r.httpStatus === 401 || r.httpStatus === 403) {
-    r.errorMessage = TEXT.unauthorized
+  if (t.httpStatus === 401 || t.httpStatus === 403) {
+    t.errorMessage = TEXT.unauthorized
+  } else if (t.httpStatus >= 400 || t.httpStatus === 0) {
+    var message = isObject(t.data) && isObject(t.data.error) ? stringOr(t.data.error.message, "") : ""
+    t.errorMessage = message || ("HTTP " + t.httpStatus)
+  }
+  return t
+}
+
+function parseResponse(stdout, exitCode) {
+  var r = emptyReading()
+  var t = readTransport(stdout, exitCode)
+  r.reachable = t.reachable
+  r.httpStatus = t.httpStatus
+  if (t.errorMessage) {
+    r.errorMessage = t.errorMessage
     return r
   }
-  if (r.httpStatus >= 400 || r.httpStatus === 0) {
-    var message = isObject(data) && isObject(data.error) ? stringOr(data.error.message, "") : ""
-    r.errorMessage = message || ("HTTP " + r.httpStatus)
-    return r
-  }
+  var data = t.data
   if (!(isObject(data) && isObject(data.result) && isObject(data.result.status))) {
     r.errorMessage = TEXT.unexpectedResponse
     return r
@@ -284,6 +345,17 @@ function parseResponse(stdout, exitCode) {
   r.nozzle = heater(st.extruder)
   r.bed = heater(st.heater_bed)
   return r
+}
+
+// Any 2xx is success: the body is not checked, the next status query shows
+// what really happened. A timeout may still mean the printer is running the
+// command, so it gets a message of its own and is never retried.
+function parseActionResponse(stdout, exitCode) {
+  if (exitCode === 28) return { ok: false, message: TEXT.commandTimeout }
+  var t = readTransport(stdout, exitCode)
+  if (t.errorMessage) return { ok: false, message: tidyMessage(t.errorMessage) }
+  if (t.httpStatus >= 200 && t.httpStatus < 300) return { ok: true, message: "" }
+  return { ok: false, message: "HTTP " + t.httpStatus }
 }
 
 function deriveState(reading) {
@@ -335,7 +407,8 @@ function initialStatus(key) {
     lastSeenAt: null,
     offlineSince: null,
     pending: false,
-    seq: 0
+    seq: 0,
+    followUp: false
   }
 }
 
@@ -385,22 +458,42 @@ function reconcileStatuses(statuses, printers) {
   return next
 }
 
-function planDispatch(statuses, printers, timeoutMs) {
+// onlyKey (optional) limits the dispatch to one printer: the fresh query
+// right after a printer command.
+function planDispatch(statuses, printers, timeoutMs, onlyKey) {
   var next = copy(isObject(statuses) ? statuses : {})
+  var only = typeof onlyKey === "string" && onlyKey !== "" ? onlyKey : ""
   var list = Array.isArray(printers) ? printers : []
   var timeoutSec = Math.max(1, Math.ceil((finiteOrNull(timeoutMs) || DEFAULT_TIMEOUT_SEC * 1000) / 1000))
   var requests = []
   for (var i = 0; i < list.length; i++) {
     var p = list[i]
     var s = next[p.key]
+    if (!isObject(p) || (only !== "" && p.key !== only)) continue
     if (!s || p.invalidReason || s.pending) continue
     var updated = copy(s)
     updated.seq = (s.seq || 0) + 1
     updated.pending = true
+    updated.followUp = false
     next[p.key] = updated
     requests.push({ key: p.key, seq: updated.seq, args: buildCurlArgs(buildQueryUrl(p.baseUrl), timeoutSec) })
   }
   return { statuses: next, requests: requests }
+}
+
+// A printer command just finished: its effect must show without waiting for
+// the next cycle. With a query already in flight (it may have read the state
+// from before the command), mark the printer so the widget asks again as
+// soon as that query returns; otherwise the caller dispatches right away.
+function requestFollowUp(statuses, key) {
+  if (!isObject(statuses)) return statuses
+  var s = statuses[key]
+  if (!isObject(s) || s.pending !== true || s.followUp === true) return statuses
+  var next = copy(statuses)
+  var marked = copy(s)
+  marked.followUp = true
+  next[key] = marked
+  return next
 }
 
 function acceptResult(statuses, key, seq, reading, now) {
@@ -412,6 +505,111 @@ function acceptResult(statuses, key, seq, reading, now) {
   applied.pending = false
   next[key] = applied
   return next
+}
+
+// ---- Printer commands: what may be sent now and what a result changes.
+//      commands is { [printerKey]: PrinterCommands }, replaced, never mutated.
+
+var ACTIONS_BY_STATE = {
+  printing: ["pause", "cancel", "emergencyStop"],
+  paused: ["resume", "cancel", "emergencyStop"],
+  idle: ["emergencyStop"]
+}
+
+function availableActions(state) {
+  return typeof state === "string" && ACTIONS_BY_STATE.hasOwnProperty(state) ? ACTIONS_BY_STATE[state].slice() : []
+}
+
+function emptyCommands() {
+  return { busy: null, estop: null, failure: null, seq: 0 }
+}
+
+function commandsFor(commands, key) {
+  var c = isObject(commands) ? commands[key] : null
+  return isObject(c) ? c : emptyCommands()
+}
+
+// Returns { commands, request }; request is null (and commands the same
+// object) whenever the action may not be sent right now.
+function planCommand(commands, printer, status, action, timeoutMs, now) {
+  var refused = { commands: commands, request: null }
+  if (!isObject(printer) || typeof printer.key !== "string" || printer.invalidReason || !printer.baseUrl) return refused
+  if (!isAction(action)) return refused
+  var state = isObject(status) ? status.state : ""
+  if (availableActions(state).indexOf(action) < 0) return refused
+  var cur = commandsFor(commands, printer.key)
+  var slot = ACTIONS[action].slot
+  if (cur.estop) return refused
+  if (slot === "busy" && cur.busy) return refused
+
+  var entry = copy(cur)
+  entry.seq = (finiteOrNull(cur.seq) || 0) + 1
+  entry[slot] = { action: action, seq: entry.seq, startedAt: finiteOrNull(now) || 0 }
+  entry.failure = null
+  var next = copy(isObject(commands) ? commands : {})
+  next[printer.key] = entry
+  var connectSec = Math.max(1, Math.ceil((finiteOrNull(timeoutMs) || DEFAULT_TIMEOUT_SEC * 1000) / 1000))
+  return {
+    commands: next,
+    request: {
+      key: printer.key,
+      seq: entry.seq,
+      action: action,
+      args: buildActionArgs(printer.baseUrl, action, connectSec),
+      guardMs: (COMMAND_TIMEOUT_SEC + 1) * 1000
+    }
+  }
+}
+
+function acceptCommandResult(commands, key, seq, result) {
+  if (!isObject(commands) || !isObject(commands[key])) return commands
+  var cur = commands[key]
+  var slot = ""
+  if (isObject(cur.busy) && cur.busy.seq === seq) slot = "busy"
+  else if (isObject(cur.estop) && cur.estop.seq === seq) slot = "estop"
+  if (slot === "") return commands
+  var action = cur[slot].action
+  var entry = copy(cur)
+  entry[slot] = null
+  if (isObject(result) && result.ok === true) {
+    entry.failure = null
+  } else {
+    var reason = isObject(result) ? stringOr(result.message, "") : ""
+    entry.failure = { action: action, message: fill(TEXT.actionFailed, TEXT.actions[action] || action, reason || TEXT.noResponse) }
+  }
+  var next = copy(commands)
+  next[key] = entry
+  return next
+}
+
+// Switching printers in the panel drops every shown failure (the one a
+// running command may still produce lands on its own printer later).
+function clearFailures(commands) {
+  if (!isObject(commands)) return commands
+  var next = null
+  for (var k in commands) {
+    if (isObject(commands[k]) && commands[k].failure) {
+      if (!next) next = copy(commands)
+      var entry = copy(commands[k])
+      entry.failure = null
+      next[k] = entry
+    }
+  }
+  return next || commands
+}
+
+function reconcileCommands(commands, printers) {
+  if (!isObject(commands)) return commands
+  var list = Array.isArray(printers) ? printers : []
+  var keep = {}
+  for (var i = 0; i < list.length; i++) if (isObject(list[i])) keep[list[i].key] = true
+  var next = {}
+  var removed = false
+  for (var k in commands) {
+    if (keep[k]) next[k] = commands[k]
+    else removed = true
+  }
+  return removed ? next : commands
 }
 
 // ---- View models
@@ -551,13 +749,86 @@ function detailFor(printer, status, now) {
   }
 }
 
-function buildPanelModel(printers, statusesByKey, selectedKey, now) {
+// The action buttons for one printer. enabled is exactly "planCommand would
+// send it now"; failureText shows even when no button does (a printer that
+// went offline after the failure).
+function buildActionsModel(printer, status, printerCommands) {
+  var model = { buttons: [], primary: [], emergency: null, failureText: "", filename: "" }
+  if (!isObject(printer) || !isObject(status)) return model
+  var pc = isObject(printerCommands) ? printerCommands : emptyCommands()
+  var wrapped = {}
+  wrapped[printer.key] = pc
+  var ids = availableActions(status.state)
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i]
+    var running = (isObject(pc.busy) && pc.busy.action === id) || (isObject(pc.estop) && pc.estop.action === id)
+    var button = {
+      id: id,
+      label: TEXT.actions[id],
+      glyph: ACTION_GLYPHS[id],
+      confirm: ACTIONS[id].confirm,
+      urgent: id === "emergencyStop",
+      busy: running,
+      enabled: planCommand(wrapped, printer, status, id, DEFAULT_TIMEOUT_SEC * 1000, 0).request !== null
+    }
+    model.buttons.push(button)
+    if (id === "emergencyStop") model.emergency = button
+    else model.primary.push(button)
+  }
+  model.failureText = isObject(pc.failure) ? stringOr(pc.failure.message, "") : ""
+  model.filename = stringOr(status.filename, "")
+  return model
+}
+
+// Confirmation texts; "" means the action asks nothing (the panel then
+// refuses to open a confirmation for it).
+function confirmMessage(action, displayName, filename) {
+  var name = stringOr(displayName, "")
+  var file = stringOr(filename, "")
+  if (action === "cancel")
+    return file !== "" ? fill(TEXT.confirm.cancelMessage, file, name) : fill(TEXT.confirm.cancelMessageNoFile, name)
+  if (action === "emergencyStop") return fill(TEXT.confirm.emergencyMessage, name)
+  return ""
+}
+
+function confirmLabel(action) {
+  if (action === "cancel") return TEXT.confirm.cancelPrint
+  if (action === "emergencyStop") return TEXT.confirm.stop
+  return ""
+}
+
+// Keyboard stops of the panel, in reading order: the printer dropdown, then
+// every button that can be pressed right now.
+function cursorStops(panelModel) {
+  var stops = []
+  if (!isObject(panelModel)) return stops
+  if (Array.isArray(panelModel.options) && panelModel.options.length > 0) stops.push("printer")
+  var a = isObject(panelModel.actions) ? panelModel.actions : {}
+  var primary = Array.isArray(a.primary) ? a.primary : []
+  for (var i = 0; i < primary.length; i++) if (primary[i].enabled) stops.push(primary[i].id)
+  if (isObject(a.emergency) && a.emergency.enabled) stops.push(a.emergency.id)
+  return stops
+}
+
+function stepCursor(stops, current, delta) {
+  var list = Array.isArray(stops) ? stops : []
+  if (list.length === 0) return ""
+  var at = list.indexOf(current)
+  if (at < 0) return list[0]
+  var step = finiteOrNull(delta) || 0
+  return list[Math.max(0, Math.min(list.length - 1, at + (step > 0 ? 1 : step < 0 ? -1 : 0)))]
+}
+
+function buildPanelModel(printers, statusesByKey, selectedKey, now, commandsByKey) {
   var list = Array.isArray(printers) ? printers : []
-  if (list.length === 0) return { empty: true, selected: null, showJob: false, rows: [], options: [] }
+  if (list.length === 0) {
+    return { empty: true, selected: null, showJob: false, rows: [], options: [], actions: buildActionsModel(null, null, null) }
+  }
   var key = resolveSelection(selectedKey, list, statusesByKey)
   var printer = list[0]
   for (var i = 0; i < list.length; i++) if (list[i].key === key) printer = list[i]
-  var selected = detailFor(printer, statusFor(printer, statusesByKey), finiteOrNull(now) || 0)
+  var selectedStatus = statusFor(printer, statusesByKey)
+  var selected = detailFor(printer, selectedStatus, finiteOrNull(now) || 0)
   var rows = []
   if (list.length > 1) {
     for (var j = 0; j < list.length; j++) {
@@ -576,13 +847,19 @@ function buildPanelModel(printers, statusesByKey, selectedKey, now) {
   // The printer dropdown takes { value, label } items.
   var options = []
   for (var k = 0; k < rows.length; k++) options.push({ value: rows[k].key, label: rows[k].optionLabel })
-  return { empty: false, selected: selected, showJob: hasJob(selected.state), rows: rows, options: options }
+  var commands = isObject(commandsByKey) ? commandsByKey[printer.key] : null
+  return { empty: false, selected: selected, showJob: hasJob(selected.state), rows: rows, options: options,
+    actions: buildActionsModel(printer, selectedStatus, commands) }
 }
 
 if (typeof module !== "undefined") {
   module.exports = {
     PRINTER_GLYPH: PRINTER_GLYPH,
     TEXT: TEXT,
+    ACTIONS: ACTIONS,
+    ACTION_GLYPHS: ACTION_GLYPHS,
+    COMMAND_TIMEOUT_SEC: COMMAND_TIMEOUT_SEC,
+    fill: fill,
     readSettings: readSettings,
     normalizeAddress: normalizeAddress,
     normalizePrinters: normalizePrinters,
@@ -607,6 +884,20 @@ if (typeof module !== "undefined") {
     resolveSelection: resolveSelection,
     buildPanelModel: buildPanelModel,
     setupCommand: setupCommand,
-    tidyMessage: tidyMessage
+    tidyMessage: tidyMessage,
+    availableActions: availableActions,
+    buildActionArgs: buildActionArgs,
+    parseActionResponse: parseActionResponse,
+    emptyCommands: emptyCommands,
+    planCommand: planCommand,
+    acceptCommandResult: acceptCommandResult,
+    reconcileCommands: reconcileCommands,
+    clearFailures: clearFailures,
+    requestFollowUp: requestFollowUp,
+    buildActionsModel: buildActionsModel,
+    confirmMessage: confirmMessage,
+    confirmLabel: confirmLabel,
+    cursorStops: cursorStops,
+    stepCursor: stepCursor
   }
 }

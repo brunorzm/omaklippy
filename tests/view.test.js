@@ -95,3 +95,10 @@ test("every user-facing text is English (no Portuguese left in TEXT)", () => {
   const all = JSON.stringify(M.TEXT)
   assert.doesNotMatch(all, /[áàâãéêíóôõúç]|imprimindo|pausada|ociosa|impressora|resposta/i)
 })
+
+test("fill replaces %1 and %2 in a single pass", () => {
+  assert.equal(typeof M.fill, "function")
+  assert.equal(M.fill("%1 on %2", "a", "b"), "a on b")
+  assert.equal(M.fill("%1 on %2", "a%2.gcode", "Voron"), "a%2.gcode on Voron")
+  assert.equal(M.fill("x %1", 5), "x 5")
+})
