@@ -19,6 +19,10 @@ selecionada. Os textos da interface são em inglês (decisão da fatia 001).
 
 - Q: A parada de emergência pede confirmação ou é enviada no primeiro clique? → A: pede
   confirmação simples, igual à do cancelamento (padrão do Mainsail/Fluidd).
+- Q: Com Pause/Resume/Cancel em andamento (macros podem levar dezenas de segundos), a parada de
+  emergência fica bloqueada? → A: não. "Emergency stop" continua disponível (com confirmação)
+  enquanto outro comando está em andamento; só os demais botões ficam bloqueados. O endpoint de
+  parada do Moonraker não passa pela fila de G-code.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -115,7 +119,8 @@ fora de `trusted_clients` ou a impressora desligada (falha), conferindo as mensa
    atualiza o estado imediatamente, sem esperar o próximo ciclo.
 2. **Given** um comando falhou (sem resposta dentro do tempo limite, acesso não autorizado, ou a
    impressora recusou), **When** a resposta chega, **Then** o painel mostra uma mensagem curta com
-   o motivo, junto dos botões, até o usuário acionar outra ação ou trocar de impressora.
+   o motivo na área de ações do painel (mesmo que os botões não apareçam mais, por exemplo com a
+   impressora offline), até o usuário acionar outra ação ou trocar de impressora.
 3. **Given** um comando falhou por falta de resposta, **When** a mensagem é exibida, **Then** o
    comando não é reenviado automaticamente.
 
@@ -169,13 +174,16 @@ fora de `trusted_clients` ou a impressora desligada (falha), conferindo as mensa
 - **FR-011**: Cada ação MUST ser enviada somente à impressora selecionada no painel no momento do
   acionamento.
 - **FR-012**: Enquanto um comando está em andamento para uma impressora, o sistema MUST impedir
-  novo envio para essa impressora e indicar o andamento no botão acionado.
+  novo envio para essa impressora e indicar o andamento no botão acionado. Exceção: "Emergency
+  stop" MUST continuar disponível enquanto Pause, Resume ou Cancel está em andamento; com a
+  própria parada em andamento, nada mais é enviado.
 - **FR-013**: Todo comando MUST ter tempo limite próprio, maior que o da consulta de estado, e
   MUST NOT ser reenviado automaticamente em caso de falha.
 - **FR-014**: Ao fim de um comando, com sucesso ou falha, o sistema MUST disparar uma atualização
   imediata do estado daquela impressora.
 - **FR-015**: Em caso de falha, o painel MUST exibir uma mensagem curta com o motivo (sem
-  resposta, acesso não autorizado, recusa da impressora com a mensagem dela), junto dos botões,
+  resposta, acesso não autorizado, recusa da impressora com a mensagem dela), na área de ações do
+  painel, mesmo quando os botões não aparecem (por exemplo, impressora offline depois da falha),
   até a próxima ação ou a troca de impressora.
 - **FR-016**: Trocar de impressora no menu MUST descartar uma confirmação aberta sem enviar
   comando.
@@ -186,7 +194,7 @@ fora de `trusted_clients` ou a impressora desligada (falha), conferindo as mensa
 - **Ação**: tipo (pause, resume, cancel, emergency stop), impressora alvo, se exige confirmação,
   estados em que está disponível.
 - **Comando em andamento**: impressora alvo, ação, instante de envio; no máximo um por
-  impressora por painel.
+  impressora por painel, mais uma parada de emergência (exceção do FR-012).
 - **Resultado do comando**: sucesso ou falha com motivo; associado à impressora alvo e exibido
   somente quando ela está selecionada.
 
@@ -196,8 +204,9 @@ fora de `trusted_clients` ou a impressora desligada (falha), conferindo as mensa
 
 - **SC-001**: A partir do desktop, o usuário pausa, retoma ou cancela uma impressão com no máximo
   3 interações (abrir o painel, acionar, confirmar quando houver), sem abrir o navegador.
-- **SC-002**: A mudança de estado causada por uma ação aparece no painel em até 2 segundos depois
-  de a impressora confirmar o comando.
+- **SC-002**: Em rede local, com a impressora respondendo normalmente, a mudança de estado causada
+  por uma ação aparece no painel em até 2 segundos depois de a impressora confirmar o comando.
+  Com a impressora lenta, o limite é de duas consultas (2 × o tempo limite da consulta).
 - **SC-003**: Em testes com cliques repetidos rápidos, 100% das vezes só um comando é enviado.
 - **SC-004**: Cancelar uma impressão ou disparar a parada de emergência sem passar pela
   confirmação é impossível (0 ocorrências em teste, por mouse e teclado).
