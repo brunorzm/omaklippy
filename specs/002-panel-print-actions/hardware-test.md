@@ -67,7 +67,8 @@ US4 retorno
 Ciclo de vida
   [s] clique, Escape, troca de painel, tooltip, botões do meio/direito sem efeito (FR-017)
   [s] desabilitar com comando em andamento: 0 processos curl; reabilitar; reiniciar sem reenvio
-  [ ] remover: adiado até o trabalho estar enviado ao GitHub (a pasta é o repositório)
+  [x] remover (depois do push): pasta, entrada no shell.json e processos somem; nada fora da
+      pasta; reinstalado do GitHub (4f9f3fe) e impressoras recadastradas, funcionando
 ```
 
 ## Fixture real capturada
