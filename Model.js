@@ -422,8 +422,17 @@ function summaryLine(printer, status) {
   return line
 }
 
-function buildIconState(printers, statusesByKey) {
-  var top = pickHighlighted(printers, statusesByKey)
+// The icon stands for the printer picked in the panel during this session,
+// or, without a (still valid) pick, for the most relevant one.
+function buildIconState(printers, statusesByKey, selectedKey) {
+  var list = Array.isArray(printers) ? printers : []
+  var top = null
+  if (typeof selectedKey === "string" && selectedKey !== "") {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].key === selectedKey) top = { printer: list[i], status: statusFor(list[i], statusesByKey) }
+    }
+  }
+  if (!top) top = pickHighlighted(list, statusesByKey)
   if (!top) return { mode: "empty", progress: null, tooltip: "OmaKlippy — nenhuma impressora configurada" }
   var st = top.status
   var progress = hasJob(st.state) && finiteOrNull(st.percent) !== null ? st.percent / 100 : null

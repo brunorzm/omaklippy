@@ -19,7 +19,7 @@ O conteúdo vem de `Model.buildIconState` e `Model.buildPanelModel` ([model-api.
 `BarIconButton` com `iconComponent`: o glifo de impressora 3D da fonte de ícones do bar (uma
 constante em `Model.js`) e, quando há progresso, uma barra fina horizontal logo abaixo do glifo,
 dentro de `Style.bar.iconCanvas`. Sem texto em nenhum estado (FR-001). O ícone representa a
-impressora de `pickHighlighted` (FR-002).
+impressora escolhida no painel nesta sessão ou, sem escolha, a de `pickHighlighted` (FR-002).
 
 | `mode` | Glifo | Barra de progresso | Botão |
 |--------|-------|--------------------|-------|

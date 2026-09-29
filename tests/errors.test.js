@@ -118,3 +118,16 @@ test("no exported function throws on garbage input", () => {
     }
   }
 })
+
+test("real Biqu capture with Klipper stopped (503 + traceback) → error 'Klippy Host not connected'", () => {
+  const r = parse("klippy-disconnected")
+  assert.equal(r.httpStatus, 503)
+  assert.deepEqual(M.deriveState(r), { state: "error", reason: "Klippy Host not connected" })
+  assert.equal(r.nozzle, null)
+})
+
+test("real Biqu capture outside trusted_clients (401 + traceback) → error with the hint", () => {
+  const r = parse("unauthorized")
+  assert.equal(r.httpStatus, 401)
+  assert.equal(M.deriveState(r).reason, "acesso não autorizado — libere este computador em trusted_clients")
+})

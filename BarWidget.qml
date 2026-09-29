@@ -224,7 +224,7 @@ BarWidget {
     function refresh(): void { root.broadcast("refresh") }
   }
 
-  readonly property var iconState: Model.buildIconState(config.printers, statuses)
+  readonly property var iconState: Model.buildIconState(config.printers, statuses, selectedKey)
   readonly property bool showProgress: iconState.progress !== null
   // Relative opacities for the progress rail: the empty track, and the fill
   // while paused so it reads apart from an active print.

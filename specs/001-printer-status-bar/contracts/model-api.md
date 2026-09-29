@@ -158,9 +158,10 @@ Impressoras com `invalidReason` contam como `offline`.
 
 `selectedKey` se ainda existe em `printers`; senão a chave de `pickHighlighted`; senão `""`.
 
-### `buildIconState(printers, statusesByKey) → IconState`
+### `buildIconState(printers, statusesByKey, selectedKey) → IconState`
 
-Modo, progresso e tooltip de uma linha da impressora de `pickHighlighted`. Sem impressoras →
+Modo, progresso e tooltip de uma linha da impressora escolhida no painel (`selectedKey`, se ainda
+existir) ou, sem escolha, da de `pickHighlighted` (FR-002). Sem impressoras →
 `{ mode: "empty", progress: null, tooltip: "OmaKlippy — nenhuma impressora configurada" }`.
 Casos: imprimindo 42% → `progress 0.42`, `"Voron — imprimindo 42%"`; offline →
 `progress null`, `"Voron — offline"`.

@@ -75,3 +75,18 @@ test("buildIconState from empty settings is the empty mode", () => {
   const cfg = M.readSettings({})
   assert.equal(M.buildIconState(cfg.printers, {}).mode, "empty")
 })
+
+test("buildIconState follows a manual selection from the panel", () => {
+  const { printers, statuses } = fleet(["error", "printing"], [{}, { percent: 27 }])
+  const icon = M.buildIconState(printers, statuses, printers[1].key)
+  assert.equal(icon.mode, "printing")
+  assert.equal(icon.progress, 0.27)
+  assert.equal(icon.tooltip, "P1 — imprimindo 27%")
+})
+
+test("buildIconState falls back to the most relevant without a (valid) selection", () => {
+  const { printers, statuses } = fleet(["idle", "error"])
+  assert.equal(M.buildIconState(printers, statuses, "").mode, "error")
+  assert.equal(M.buildIconState(printers, statuses, "gone#9").mode, "error")
+  assert.equal(M.buildIconState(printers, statuses).mode, "error")
+})

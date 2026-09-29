@@ -102,7 +102,7 @@ Qualquer estado pode ir para qualquer outro; não há estados intermediários.
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| `mode` | enum | `empty` \| `idle` \| `printing` \| `paused` \| `error` \| `offline`, da impressora escolhida por `pickHighlighted`. |
+| `mode` | enum | `empty` \| `idle` \| `printing` \| `paused` \| `error` \| `offline`, da impressora de `selectedKey` ou, sem escolha, da escolhida por `pickHighlighted`. |
 | `progress` | 0–1 ou `null` | Fração para a barra do ícone (`percent / 100`); só em `printing`/`paused`. |
 | `tooltip` | string | Uma linha: `"Voron — imprimindo 42%"` (FR-005). |
 

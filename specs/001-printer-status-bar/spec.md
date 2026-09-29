@@ -27,6 +27,13 @@ para trocar a impressora exibida. Os botões de ação desse painel ficam para a
 - Q: Qual impressora aparece selecionada ao abrir o painel? → A: a mais relevante pela
   prioridade de estado; a escolha manual vale enquanto o shell estiver rodando e não é gravada.
 
+### Session 2026-09-29 (teste em hardware)
+
+- Q: Depois de escolher uma impressora no painel, o que o ícone mostra? → A: segue só a
+  impressora escolhida (sem alerta das demais); sem escolha manual, a mais relevante. A escolha
+  vale só na sessão do shell. Consequência aceita: com uma escolha manual ativa, um erro em outra
+  impressora só aparece no painel.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ver de relance na barra se a impressão vai bem (Priority: P1)
@@ -135,6 +142,9 @@ que os detalhes trocam; testar com mouse e com teclado.
 3. **Given** o usuário escolheu uma impressora manualmente, **When** fecha e reabre o painel
    durante a mesma sessão, **Then** a escolha é mantida; se essa impressora for removida do
    cadastro, volta a valer a mais relevante.
+6. **Given** o usuário escolheu uma impressora no painel, **When** olha a barra, **Then** o
+   ícone passa a representar a impressora escolhida, mesmo que outra esteja em estado mais
+   urgente.
 4. **Given** duas impressoras com o mesmo nome, **When** aparecem na lista, **Then** são
    distinguíveis pelo endereço exibido junto ao nome.
 5. **Given** uma única impressora cadastrada, **When** o painel abre, **Then** a lista não
@@ -185,8 +195,9 @@ uma e verificar que ela some do painel.
   mesma impressora enquanto a anterior está pendente.
 - Impressora selecionada no painel removida enquanto o painel está aberto: a seleção passa para a
   mais relevante.
-- Várias impressoras em estados diferentes: o ícone representa só a mais relevante; as demais são
-  vistas no painel.
+- Várias impressoras em estados diferentes: o ícone representa só uma (a escolhida no painel ou,
+  sem escolha, a mais relevante); as demais são vistas no painel. Com uma escolha manual ativa,
+  um erro em outra impressora não aparece no ícone.
 
 ## Requirements *(mandatory)*
 
@@ -195,8 +206,9 @@ uma e verificar que ela some do painel.
 **Barra**
 
 - **FR-001**: A barra MUST exibir apenas o ícone do plugin, sem texto, em qualquer estado.
-- **FR-002**: O ícone MUST representar a impressora mais relevante pela prioridade erro >
-  imprimindo > pausada > offline > ociosa (empate: ordem de cadastro).
+- **FR-002**: O ícone MUST representar a impressora escolhida no painel nesta sessão do shell;
+  sem escolha manual (ou se a escolhida foi removida), MUST representar a mais relevante pela
+  prioridade erro > imprimindo > pausada > offline > ociosa (empate: ordem de cadastro).
 - **FR-003**: Em "imprimindo" e "pausada", o ícone MUST exibir um indicador gráfico de progresso
   proporcional à porcentagem concluída; "pausada" MUST ser distinguível de "imprimindo".
 - **FR-004**: Em "erro", o ícone MUST usar a cor de alerta do tema; em "offline", MUST aparecer
@@ -235,7 +247,7 @@ uma e verificar que ela some do painel.
   restante estimado e temperaturas atual e alvo do bico e da mesa, quando aplicáveis.
 - **FR-017**: Com mais de uma impressora, o painel MUST listar todas com nome, estado e progresso
   (quando houver) e permitir selecionar qualquer uma por mouse e por teclado.
-- **FR-018**: Ao abrir, o painel MUST selecionar a impressora mais relevante (FR-002), a menos
+- **FR-018**: Ao abrir, o painel MUST selecionar a impressora mais relevante (prioridade do FR-002), a menos
   que o usuário tenha escolhido outra na mesma sessão do shell e ela ainda esteja cadastrada. A
   escolha não é persistida.
 - **FR-019**: Impressoras com o mesmo nome MUST ser exibidas de forma distinguível (nome +
