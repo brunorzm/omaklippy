@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.brunorzm.omaklippy",
+  "name": "OmaKlippy",
+  "version": "0.1.0",
+  "author": "Bruno",
+  "license": "MIT",
+  "description": "3D Pinter status and control. Klipper firmwares",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "barWidget": {
+    "displayName": "OmaKlippy",
+    "category": "Devices",
+    "allowMultiple": true,
+    "defaultSection": "right"
+  }
+}
