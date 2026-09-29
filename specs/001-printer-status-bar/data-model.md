@@ -38,7 +38,9 @@ Derivado na carga (`normalizePrinters`):
 | `httpStatus` | inteiro | `0` quando não houve resposta HTTP. |
 | `errorMessage` | string | Motivo legível (erro HTTP, Moonraker, Klipper ou curl). |
 | `klippyState` | string | `webhooks.state`: `ready`, `startup`, `shutdown`, `error` ou `""`. |
+| `klippyMessage` | string | `webhooks.state_message` (motivo em erro do Klipper). |
 | `printState` | string | `print_stats.state`: `standby`, `printing`, `paused`, `complete`, `cancelled`, `error` ou `""`. |
+| `printMessage` | string | `print_stats.message` (motivo de erro na impressão). |
 | `progress` | número 0–1 ou `null` | `virtual_sdcard.progress`, com fallback para `display_status.progress`. |
 | `printDuration` | número (s) ou `null` | `print_stats.print_duration`. |
 | `filename` | string | `print_stats.filename`. |

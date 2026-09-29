@@ -47,9 +47,26 @@ shell não mescla `defaults` em runtime; o widget aplica os padrões via `Model.
 
 ```bash
 omarchy bar set io.github.brunorzm.omaklippy printers \
-  '[{"name":"Voron","address":"192.168.1.50"}]' --json
+  '[{"name":"Voron","address":"192.168.1.50"}]'
 omarchy bar set io.github.brunorzm.omaklippy refreshIntervalSec 10 --json
 ```
+
+**`printers` vai sem `--json`.** Com `--json`, o `quickshell ipc call` que o `omarchy bar set`
+usa por baixo interpreta o argumento que parece uma lista e o divide: uma lista de um item vira
+o objeto solto, e uma lista de dois itens falha com "Too many arguments" (bug do Omarchy
+4.0.4-1, verificado em 2026-09-29). Sem `--json`, a lista é gravada como texto JSON. Por isso o
+widget aceita `printers` em três formas (`Model.readSettings`):
+
+1. lista JSON (edição direta do `shell.json`), que chega ao QML como sequência do Qt, com
+   `Array.isArray` falso, e é lida pelo `length`;
+2. texto com uma lista JSON (o `bar set` sem `--json`);
+3. um único objeto `{ name, address }` (o que sobra de um `bar set --json` com um item).
+
+Segundo bug encontrado (mesma versão): o `omarchy bar set` altera a entrada no próprio lugar, e
+o layout em memória do bar compartilha esse objeto. A partir do segundo `bar set` no mesmo
+widget, o `inlineSettingsDelta` não enxerga diferença e o widget em execução não recebe o valor
+novo até reiniciar o shell (nem com `reloadConfig`). A edição direta do `shell.json` é sempre
+aplicada ao vivo.
 
 Também é possível editar a entrada em `shell.json` diretamente. Com várias instâncias do widget,
 use o argumento de posicionamento do `omarchy bar set` para escolher qual entrada alterar.

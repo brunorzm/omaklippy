@@ -113,7 +113,7 @@ erro no log. Não há botões de ação no painel.
 | Hide | `omarchy-shell shell hide $PLUGIN_ID` | o painel fecha |
 | Troca de painel | com o painel aberto, clicar no ícone de Wi-Fi | o nosso fecha e o outro abre, sem os dois ficarem abertos |
 | Desabilitar | `omarchy plugin disable $PLUGIN_ID` (com o painel aberto) | ícone e painel somem; nenhum `curl` restante (`pgrep -af 'curl.*printer/objects'` vazio) |
-| Reabilitar | `omarchy plugin enable $PLUGIN_ID` | volta com a configuração anterior |
+| Reabilitar | `omarchy plugin enable $PLUGIN_ID` | o widget volta à barra **sem** as configurações (o `disable` do Omarchy remove a entrada do layout; recadastre as impressoras) |
 | Reiniciar shell | `omarchy-restart-shell` | o ícone volta, as consultas recomeçam e a seleção volta a automática |
 | Remover | `omarchy plugin remove $PLUGIN_ID` | tudo some; nenhum arquivo do plugin fora da pasta |
 

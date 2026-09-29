@@ -27,10 +27,13 @@ impressora de `pickHighlighted` (FR-002).
 | `idle` | cor do bar | não | normal |
 | `printing` | cor do bar | trilho `Util.alpha(barForeground, baixa)` + preenchimento `barForeground` proporcional a `progress` | normal |
 | `paused` | cor do bar | mesma barra, preenchimento em opacidade reduzida (distingue de imprimindo) | normal |
-| `error` | `urgent` do tema | não | `active` com cor `urgent` |
+| `error` | `urgent` do tema + selo circular no canto superior direito (mesma cor, contorno no fundo do bar) | não | normal |
 | `offline` | cor do bar | não | `dimmed: true` |
 
 - A espessura da barra e o espaçamento vêm de `Style.space()`; nenhuma dimensão ou cor é fixa.
+- O selo de erro existe porque alguns temas definem `urgent` próximo da cor do bar (no tema em
+  uso durante a implementação, `urgent` era `#565d60`), o que deixaria erro e offline quase
+  iguais. A forma garante a distinção sem cor fixa (Princípio VIII).
 - Em barra vertical, o slot é o mesmo (`Style.bar.iconSlot`) e a barra de progresso continua
   horizontal sob o glifo.
 - Tooltip (`tooltipText`), com uma linha só: `Voron — imprimindo 42%`, `Voron — pausada 42%`,

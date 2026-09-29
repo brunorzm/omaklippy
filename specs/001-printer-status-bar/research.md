@@ -89,6 +89,14 @@ Fontes: guia oficial (https://plugins.omarchy.org/develop.html), referência do 
 - **Alternatives considered**: campo `string` "Nome=endereço; Nome2=endereço2" (cabe no schema,
   mas é frágil com nomes contendo `=`/`;`); arquivo de configuração próprio (viola o Princípio I).
 
+- **Achados na implementação (2026-09-29)**: o `omarchy bar set --json` não grava listas
+  (o parser do `quickshell ipc call` divide o argumento), e o QML entrega listas do `shell.json`
+  como sequências do Qt, não como `Array`. O `readSettings` aceita as três formas
+  ([contracts/settings.md](./contracts/settings.md#como-o-usuário-cadastra-documentado-no-readme)).
+  Além disso, o hot reload do shell não recarrega de forma confiável o `BarWidget.qml`/`Model.js`
+  de um plugin de terceiros, então é preciso rodar `omarchy-restart-shell` depois de cada mudança
+  durante o desenvolvimento.
+
 ## R6. Normalização de endereço
 
 - **Decision**: função pura `normalizeAddress`: aceita `host`, `host:porta`, `http://host[:porta]`

@@ -1,0 +1,168 @@
+const test = require("node:test")
+const assert = require("node:assert/strict")
+const { loadModel, loadFixture } = require("./helpers")
+const M = loadModel()
+
+function reading(name) {
+  const f = loadFixture(name)
+  return M.parseResponse(f.stdout, f.exitCode)
+}
+
+// One printer named Voron whose status came from the given fixture at `at`.
+function single(fixture, at, prev) {
+  const printers = M.normalizePrinters([{ name: "Voron", address: "192.168.1.50" }])
+  const key = printers[0].key
+  const base = prev || M.initialStatus(key)
+  const status = fixture ? M.applyReading(base, reading(fixture), at) : base
+  return { printers, key, statuses: { [key]: status } }
+}
+
+test("formatTemp", () => {
+  assert.equal(M.formatTemp({ current: 214.8, target: 215 }), "215/215 °C")
+  assert.equal(M.formatTemp({ current: 25.3, target: 0 }), "25 °C")
+  assert.equal(M.formatTemp(null), "—")
+})
+
+test("formatDuration", () => {
+  assert.equal(M.formatDuration(3725), "1h 02m")
+  assert.equal(M.formatDuration(2700), "45m")
+  assert.equal(M.formatDuration(59), "<1m")
+  assert.equal(M.formatDuration(null), "—")
+})
+
+test("formatAgo", () => {
+  assert.equal(M.formatAgo(95000), "há 1 min")
+  assert.equal(M.formatAgo(30000), "há <1 min")
+  assert.equal(M.formatAgo(2 * 3600 * 1000 + 5000), "há 2 h")
+})
+
+test("resolveSelection without a manual choice follows pickHighlighted", () => {
+  const printers = M.normalizePrinters([{ name: "A", address: "10.0.0.1" }, { name: "B", address: "10.0.0.2" }])
+  const statuses = M.reconcileStatuses({}, printers)
+  statuses[printers[0].key] = Object.assign({}, statuses[printers[0].key], { state: "idle" })
+  statuses[printers[1].key] = Object.assign({}, statuses[printers[1].key], { state: "printing" })
+  assert.equal(M.resolveSelection("", printers, statuses), printers[1].key)
+  assert.equal(M.resolveSelection("", [], {}), "")
+})
+
+test("buildPanelModel while printing", () => {
+  const { printers, key, statuses } = single("printing.synthetic", 1000)
+  const m = M.buildPanelModel(printers, statuses, "", 20000)
+  assert.equal(m.empty, false)
+  assert.equal(m.showJob, true)
+  assert.deepEqual(m.rows, [], "single printer → no list")
+  const s = m.selected
+  assert.equal(s.key, key)
+  assert.equal(s.displayName, "Voron")
+  assert.equal(s.state, "printing")
+  assert.equal(s.stateLabel, "imprimindo")
+  assert.equal(s.metaText, "imprimindo · 42%")
+  assert.equal(s.percent, 42)
+  assert.equal(s.filename, "hook.gcode")
+  assert.equal(s.remainingText, "26m")
+  assert.equal(s.nozzleText, "215/215 °C")
+  assert.equal(s.bedText, "60/60 °C")
+  assert.equal(s.showTemps, true)
+  assert.equal(s.freshnessText, "atualizado há <1 min")
+  assert.equal(s.reason, "")
+})
+
+test("buildPanelModel while paused keeps the job block", () => {
+  const { printers, statuses } = single("paused.synthetic", 1000)
+  const m = M.buildPanelModel(printers, statuses, "", 1000)
+  assert.equal(m.showJob, true)
+  assert.equal(m.selected.metaText, "pausada · 42%")
+})
+
+test("buildPanelModel shows '—' when the remaining time is unknown", () => {
+  const { printers, key, statuses } = single("printing.synthetic", 1000)
+  statuses[key] = Object.assign({}, statuses[key], { remainingSec: null })
+  assert.equal(M.buildPanelModel(printers, statuses, "", 1000).selected.remainingText, "—")
+})
+
+test("buildPanelModel when idle hides the job block but keeps temperatures", () => {
+  const { printers, statuses } = single("standby", 1000)
+  const m = M.buildPanelModel(printers, statuses, "", 1000)
+  assert.equal(m.showJob, false)
+  assert.equal(m.selected.metaText, "ociosa")
+  assert.equal(m.selected.showTemps, true)
+})
+
+test("buildPanelModel on error shows the reason", () => {
+  const { printers, statuses } = single("klippy-disconnected.synthetic", 1000)
+  const m = M.buildPanelModel(printers, statuses, "", 1000)
+  assert.equal(m.showJob, false)
+  assert.equal(m.selected.metaText, "erro")
+  assert.equal(m.selected.reason, "Klippy Host not connected")
+  assert.equal(m.selected.showTemps, false)
+})
+
+test("buildPanelModel offline: reason, no data, 'sem resposta há'", () => {
+  const { printers, statuses } = single("timeout", 1000, M.applyReading(M.initialStatus("x"), reading("printing.synthetic"), 500))
+  const m = M.buildPanelModel(printers, statuses, "", 1000 + 180000)
+  assert.equal(m.showJob, false)
+  assert.equal(m.selected.metaText, "offline")
+  assert.equal(m.selected.reason, "sem resposta (tempo limite)")
+  assert.equal(m.selected.showTemps, false)
+  assert.equal(m.selected.freshnessText, "sem resposta há 3 min")
+})
+
+test("buildPanelModel before the first answer", () => {
+  const { printers, statuses } = single(null, 0)
+  const m = M.buildPanelModel(printers, statuses, "", 1000)
+  assert.equal(m.selected.metaText, "offline")
+  assert.equal(m.selected.reason, "aguardando primeira resposta")
+  assert.equal(m.selected.freshnessText, "")
+})
+
+function fleet() {
+  const printers = M.normalizePrinters([
+    { name: "Voron", address: "10.0.0.1" },
+    { name: "Ender", address: "10.0.0.2" },
+    { name: "Prusa", address: "10.0.0.3" },
+  ])
+  let statuses = M.reconcileStatuses({}, printers)
+  statuses[printers[0].key] = M.applyReading(statuses[printers[0].key], reading("standby"), 1000)
+  statuses[printers[1].key] = M.applyReading(statuses[printers[1].key], reading("printing.synthetic"), 1000)
+  statuses[printers[2].key] = M.applyReading(statuses[printers[2].key], reading("refused"), 1000)
+  return { printers, statuses }
+}
+
+test("resolveSelection keeps a manual choice that still exists", () => {
+  const { printers, statuses } = fleet()
+  assert.equal(M.resolveSelection(printers[0].key, printers, statuses), printers[0].key)
+})
+
+test("resolveSelection falls back to the most relevant when the choice was removed", () => {
+  const { printers, statuses } = fleet()
+  assert.equal(M.resolveSelection("gone#7", printers, statuses), printers[1].key)
+})
+
+test("buildPanelModel lists every printer in registration order", () => {
+  const { printers, statuses } = fleet()
+  const m = M.buildPanelModel(printers, statuses, "", 1000)
+  assert.deepEqual(m.rows.map(r => r.displayName), ["Voron", "Ender", "Prusa"])
+  assert.deepEqual(m.rows.map(r => r.stateLabel), ["ociosa", "imprimindo", "offline"])
+  assert.deepEqual(m.rows.map(r => r.percentText), ["", "42%", ""])
+  assert.deepEqual(m.rows.map(r => r.selected), [false, true, false], "defaults to the highlighted printer")
+  assert.equal(m.rows[0].key, printers[0].key)
+  assert.equal(m.selected.displayName, "Ender")
+})
+
+test("buildPanelModel follows a manual selection", () => {
+  const { printers, statuses } = fleet()
+  const m = M.buildPanelModel(printers, statuses, printers[2].key, 1000)
+  assert.equal(m.selected.displayName, "Prusa")
+  assert.deepEqual(m.rows.map(r => r.selected), [false, false, true])
+})
+
+test("buildPanelModel without printers is the empty state", () => {
+  assert.deepEqual(M.buildPanelModel([], {}, "", 0), { empty: true, selected: null, showJob: false, rows: [] })
+})
+
+test("setupCommand is the exact command shown in the empty panel", () => {
+  assert.equal(
+    M.setupCommand(),
+    `omarchy bar set io.github.brunorzm.omaklippy printers '[{"name":"Minha impressora","address":"192.168.1.50"}]'`
+  )
+})

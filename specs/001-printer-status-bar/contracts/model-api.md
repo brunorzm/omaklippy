@@ -148,10 +148,11 @@ offlineSince: null, pending: false, seq: 0 }`
 
 ## Visão
 
-### `pickHighlighted(statuses) → PrinterStatus | null`
+### `pickHighlighted(printers, statusesByKey) → { printer, status } | null`
 
-Prioridade `error` > `printing` > `paused` > `offline` > `idle`; empate pela menor `order`.
-Retorna `null` para lista vazia. Impressoras com `invalidReason` contam como `offline`.
+Prioridade `error` > `printing` > `paused` > `offline` > `idle`; empate pela menor `order` (por
+isso recebe a lista de impressoras, e não só os status). Retorna `null` para lista vazia.
+Impressoras com `invalidReason` contam como `offline`.
 
 ### `resolveSelection(selectedKey, printers, statusesByKey) → string`
 

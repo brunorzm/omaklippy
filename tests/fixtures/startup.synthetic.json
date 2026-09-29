@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\": {\"eventtime\": 1.0, \"status\": {\"webhooks\": {\"state\": \"startup\", \"state_message\": \"\"}, \"print_stats\": {\"state\": \"standby\", \"message\": \"\"}, \"virtual_sdcard\": {\"progress\": 0.3}, \"extruder\": {\"temperature\": 30.0, \"target\": 0.0}, \"heater_bed\": {\"temperature\": 25.0, \"target\": 0.0}}}}\n200"
+}

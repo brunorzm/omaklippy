@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"error\": {\"code\": 401, \"message\": \"Unauthorized\"}}\n401"
+}
