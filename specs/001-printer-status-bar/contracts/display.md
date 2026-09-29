@@ -8,10 +8,10 @@ O conteúdo vem de `Model.buildIconState` e `Model.buildPanelModel` ([model-api.
 
 | `state` | Rótulo |
 |---------|--------|
-| `printing` | imprimindo |
-| `paused` | pausada |
-| `idle` | ociosa |
-| `error` | erro |
+| `printing` | printing |
+| `paused` | paused |
+| `idle` | idle |
+| `error` | error |
 | `offline` | offline |
 
 ## Ícone na barra
@@ -36,9 +36,9 @@ impressora escolhida no painel nesta sessão ou, sem escolha, a de `pickHighligh
   iguais. A forma garante a distinção sem cor fixa (Princípio VIII).
 - Em barra vertical, o slot é o mesmo (`Style.bar.iconSlot`) e a barra de progresso continua
   horizontal sob o glifo.
-- Tooltip (`tooltipText`), com uma linha só: `Voron — imprimindo 42%`, `Voron — pausada 42%`,
-  `Voron — ociosa`, `Voron — erro`, `Voron — offline`, ou
-  `OmaKlippy — nenhuma impressora configurada`.
+- Tooltip (`tooltipText`), com uma linha só: `Voron — printing 42%`, `Voron — paused 42%`,
+  `Voron — idle`, `Voron — error`, `Voron — offline`, ou
+  `OmaKlippy — no printers configured`.
 - O item aparece sempre, mesmo sem impressoras, como porta de entrada para o painel (as
   instruções de cadastro ficam lá).
 
@@ -53,19 +53,19 @@ impressora escolhida no painel nesta sessão ou, sem escolha, a de `pickHighligh
 ```text
 ┌──────────────────────────────────────┐
 │ [G]  Voron                           │  PanelHero: título = nome
-│      imprimindo · 42%                │             meta = estado · %
+│      printing · 42%                │             meta = estado · %
 ├──────────────────────────────────────┤
 │ ▓▓▓▓▓▓▓▓░░░░░░░░░░░  42%             │  progresso (só imprimindo/pausada)
 │ hook.gcode                           │
-│ Restante  1h 02m                     │
+│ Remaining  1h 02m                     │
 │                                      │
-│ Bico   215 / 215 °C                  │
-│ Mesa    60 / 60 °C                   │
-│ atualizado há <1 min                 │
+│ Nozzle 215 / 215 °C                  │
+│ Bed     60 / 60 °C                   │
+│ updated <1 min ago                 │
 │                                      │
-│ IMPRESSORAS                          │  PanelSectionHeader (só se > 1)
-│ ● Voron                imprimindo 42%│  linha selecionada
-│   Ender (192.168.1.51)        ociosa │
+│ PRINTERS                             │  PanelSectionHeader (só se > 1)
+│ ● Voron                  printing 42%│  linha selecionada
+│   Ender (192.168.1.51)          idle │
 │   Ender (ender.local)        offline │
 └──────────────────────────────────────┘
 ```
@@ -77,11 +77,11 @@ impressora escolhida no painel nesta sessão ou, sem escolha, a de `pickHighligh
 | imprimindo / pausada | progresso, %, arquivo, restante (ou "—"), temperaturas, atualizado há | — |
 | ociosa | temperaturas, atualizado há | progresso, arquivo, restante |
 | erro | motivo em `PanelHero.detail`; temperaturas se vierem na resposta | progresso, arquivo, restante |
-| offline | motivo e "sem resposta há X min" | progresso, arquivo, restante, temperaturas |
+| offline | motivo e "no response for X min" | progresso, arquivo, restante, temperaturas |
 
-Antes da primeira resposta: offline, com o motivo "aguardando primeira resposta".
+Antes da primeira resposta: offline, com o motivo "waiting for first response".
 
-**Sem impressoras**: `PanelHero` com "OmaKlippy" / "nenhuma impressora configurada" e o comando
+**Sem impressoras**: `PanelHero` com "OmaKlippy" / "no printers configured", o texto "Add a printer with:" e o comando
 de cadastro de [settings.md](./settings.md#como-o-usuário-cadastra-documentado-no-readme) em
 texto selecionável.
 

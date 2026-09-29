@@ -80,10 +80,10 @@ test("estimateRemaining uses print_duration / progress", () => {
 })
 
 test("stateLabel maps the five states", () => {
-  assert.equal(M.stateLabel("printing"), "imprimindo")
-  assert.equal(M.stateLabel("paused"), "pausada")
-  assert.equal(M.stateLabel("idle"), "ociosa")
-  assert.equal(M.stateLabel("error"), "erro")
+  assert.equal(M.stateLabel("printing"), "printing")
+  assert.equal(M.stateLabel("paused"), "paused")
+  assert.equal(M.stateLabel("idle"), "idle")
+  assert.equal(M.stateLabel("error"), "error")
   assert.equal(M.stateLabel("offline"), "offline")
 })
 
@@ -91,7 +91,7 @@ test("initialStatus is offline, waiting for the first answer", () => {
   assert.deepEqual(M.initialStatus("k#0"), {
     key: "k#0",
     state: "offline",
-    reason: "aguardando primeira resposta",
+    reason: "waiting for first response",
     percent: null,
     remainingSec: null,
     filename: "",

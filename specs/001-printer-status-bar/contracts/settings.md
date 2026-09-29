@@ -34,8 +34,8 @@ vistos nos plugins first-party; o formulário que os renderiza ainda não vem no
   "defaultSection": "right",
   "defaults": { "printers": [], "refreshIntervalSec": 5, "timeoutSec": 3 },
   "schema": [
-    { "key": "refreshIntervalSec", "type": "integer", "label": "Intervalo de atualização (s)", "min": 2, "max": 3600, "step": 1, "defaultValue": 5 },
-    { "key": "timeoutSec", "type": "integer", "label": "Tempo limite (s)", "min": 1, "max": 30, "step": 1, "defaultValue": 3 }
+    { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (s)", "min": 2, "max": 3600, "step": 1, "defaultValue": 5 },
+    { "key": "timeoutSec", "type": "integer", "label": "Timeout (s)", "min": 1, "max": 30, "step": 1, "defaultValue": 3 }
   ]
 }
 ```

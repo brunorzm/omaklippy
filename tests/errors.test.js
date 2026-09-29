@@ -9,10 +9,10 @@ function parse(name) {
 }
 
 const curlCases = [
-  ["bad-url", "endereço inválido"],
-  ["dns", "host não encontrado"],
-  ["refused", "conexão recusada"],
-  ["timeout", "sem resposta (tempo limite)"],
+  ["bad-url", "invalid address"],
+  ["dns", "host not found"],
+  ["refused", "connection refused"],
+  ["timeout", "no response (timeout)"],
 ]
 for (const [fixture, message] of curlCases) {
   test(`curl failure ${fixture} → offline "${message}"`, () => {
@@ -27,22 +27,22 @@ for (const [fixture, message] of curlCases) {
 test("any other curl failure → offline with the curl code", () => {
   const r = M.parseResponse("\n000", 35)
   assert.equal(r.reachable, false)
-  assert.equal(r.errorMessage, "falha de rede (curl 35)")
+  assert.equal(r.errorMessage, "network error (curl 35)")
 })
 
-test("curl that could not start → error 'curl não encontrado'", () => {
+test("curl that could not start → error 'curl not found'", () => {
   for (const code of [-1, 127]) {
     const r = M.parseResponse("", code)
     assert.equal(r.reachable, true)
     assert.equal(r.httpStatus, 0)
-    assert.equal(r.errorMessage, "curl não encontrado")
+    assert.equal(r.errorMessage, "curl not found")
     assert.equal(M.deriveState(r).state, "error")
   }
-  assert.equal(M.deriveState(parse("curl-missing.synthetic")).reason, "curl não encontrado")
+  assert.equal(M.deriveState(parse("curl-missing.synthetic")).reason, "curl not found")
 })
 
 test("401/403 → error with the trusted_clients hint", () => {
-  const msg = "acesso não autorizado — libere este computador em trusted_clients"
+  const msg = "unauthorized — allow this computer in trusted_clients"
   assert.equal(parse("unauthorized.synthetic").errorMessage, msg)
   assert.equal(M.parseResponse('{"error":{"code":403,"message":"Forbidden"}}\n403', 0).errorMessage, msg)
   assert.deepEqual(M.deriveState(parse("unauthorized.synthetic")), { state: "error", reason: msg })
@@ -54,9 +54,9 @@ test("other HTTP errors use error.message, or 'HTTP <code>'", () => {
   assert.equal(M.deriveState(parse("klippy-disconnected.synthetic")).state, "error")
 })
 
-test("200 without result.status, or not JSON → 'resposta inesperada'", () => {
-  assert.equal(parse("garbage.synthetic").errorMessage, "resposta inesperada")
-  assert.equal(M.parseResponse('{"result":{}}\n200', 0).errorMessage, "resposta inesperada")
+test("200 without result.status, or not JSON → 'unexpected response'", () => {
+  assert.equal(parse("garbage.synthetic").errorMessage, "unexpected response")
+  assert.equal(M.parseResponse('{"result":{}}\n200', 0).errorMessage, "unexpected response")
   assert.equal(M.deriveState(parse("garbage.synthetic")).state, "error")
 })
 
@@ -101,7 +101,7 @@ test("applyReading back online resets offlineSince", () => {
   assert.equal(on.offlineSince, null)
 })
 
-test("applyReading does not mark 'curl não encontrado' as seen", () => {
+test("applyReading does not mark 'curl not found' as seen", () => {
   const s = M.applyReading(M.initialStatus("k"), parse("curl-missing.synthetic"), 1000)
   assert.equal(s.state, "error")
   assert.equal(s.lastSeenAt, null)
@@ -129,7 +129,7 @@ test("real Biqu capture with Klipper stopped (503 + traceback) → error 'Klippy
 test("real Biqu capture outside trusted_clients (401 + traceback) → error with the hint", () => {
   const r = parse("unauthorized")
   assert.equal(r.httpStatus, 401)
-  assert.equal(M.deriveState(r).reason, "acesso não autorizado — libere este computador em trusted_clients")
+  assert.equal(M.deriveState(r).reason, "unauthorized — allow this computer in trusted_clients")
 })
 
 test("real Voron FIRMWARE_RESTART sequence: 'Klippy Disconnected' 503, then startup", () => {

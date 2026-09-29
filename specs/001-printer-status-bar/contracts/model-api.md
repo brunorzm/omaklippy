@@ -13,6 +13,13 @@ Superfície testável da fatia (Princípio V). Regras para todas as funções:
 
 Tipos referenciados em [../data-model.md](../data-model.md).
 
+## Textos
+
+Todo texto exibido ao usuário, em inglês, fica no objeto exportado `TEXT` (estados, motivos,
+tooltip vazio, frases de atualização, rótulos do painel e o nome de exemplo do comando de
+cadastro). Modelos com `%1` são preenchidos por `fill(template, value)`. Um teste garante que
+`TEXT` não contém português.
+
 ## Configuração
 
 ### `readSettings(settings) → { printers: PrinterConfig[], intervalMs, timeoutMs }`
@@ -69,18 +76,18 @@ Primeiro o código de saída do curl, depois o código HTTP (a última linha do 
 | curl `exitCode` | Resultado |
 |-----------------|-----------|
 | `0` | Segue para o código HTTP. |
-| `3` | `reachable:false`, "endereço inválido" |
-| `6` | `reachable:false`, "host não encontrado" |
-| `7` | `reachable:false`, "conexão recusada" |
-| `28` | `reachable:false`, "sem resposta (tempo limite)" |
-| `-1`, `127` ou processo que não iniciou | `reachable:true`, `httpStatus:0`, "curl não encontrado" → estado `error` (Princípio IV) |
-| outro ≠ 0 | `reachable:false`, `"falha de rede (curl <código>)"` |
+| `3` | `reachable:false`, "invalid address" |
+| `6` | `reachable:false`, "host not found" |
+| `7` | `reachable:false`, "connection refused" |
+| `28` | `reachable:false`, "no response (timeout)" |
+| `-1`, `127` ou processo que não iniciou | `reachable:true`, `httpStatus:0`, "curl not found" → estado `error` (Princípio IV) |
+| outro ≠ 0 | `reachable:false`, `"network error (curl <código>)"` |
 
 | HTTP | Resultado |
 |------|-----------|
 | `200` com `result.status` objeto | Preenche `klippyState`, `printState`, `progress`, `printDuration`, `filename`, `nozzle`, `bed`. |
-| `200` sem `result.status`, ou corpo não-JSON | `errorMessage` "resposta inesperada". |
-| `401` / `403` | "acesso não autorizado — libere este computador em trusted_clients" |
+| `200` sem `result.status`, ou corpo não-JSON | `errorMessage` "unexpected response". |
+| `401` / `403` | "unauthorized — allow this computer in trusted_clients" |
 | outro ≥ 400 | `errorMessage` = `error.message` do corpo, ou `"HTTP <código>"`. |
 
 Campos ausentes na resposta viram `null`/`""`. Números não finitos viram `null`.
@@ -91,7 +98,7 @@ Avaliada nesta ordem (research R3):
 
 1. `!reachable` → `offline`, `reason = errorMessage`.
 2. `errorMessage` não vazio → `error`.
-3. `klippyState !== "ready"` → `error`; `reason` = `state_message` ou `"Klipper: <estado>"`.
+3. `klippyState !== "ready"` → `error`; `reason` = `state_message` ou `"Klipper: <estado>"` (estado desconhecido → `"Klipper: unknown"`); erro de impressão sem mensagem → `"print error"`.
 4. `printState`: `printing` → `printing`; `paused` → `paused`; `error` → `error`
    (`print_stats.message`); `standby` / `complete` / `cancelled` / `""` → `idle`.
 
@@ -121,7 +128,7 @@ ou o **mesmo** objeto quando não há mudança, para o QML poder comparar por id
 
 ### `initialStatus(key) → PrinterStatus`
 
-`{ key, state: "offline", reason: "aguardando primeira resposta", percent: null,
+`{ key, state: "offline", reason: "waiting for first response", percent: null,
 remainingSec: null, filename: "", nozzle: null, bed: null, lastSeenAt: null,
 offlineSince: null, pending: false, seq: 0 }`
 
@@ -162,15 +169,15 @@ Impressoras com `invalidReason` contam como `offline`.
 
 Modo, progresso e tooltip de uma linha da impressora escolhida no painel (`selectedKey`, se ainda
 existir) ou, sem escolha, da de `pickHighlighted` (FR-002). Sem impressoras →
-`{ mode: "empty", progress: null, tooltip: "OmaKlippy — nenhuma impressora configurada" }`.
-Casos: imprimindo 42% → `progress 0.42`, `"Voron — imprimindo 42%"`; offline →
+`{ mode: "empty", progress: null, tooltip: "OmaKlippy — no printers configured" }`.
+Casos: imprimindo 42% → `progress 0.42`, `"Voron — printing 42%"`; offline →
 `progress null`, `"Voron — offline"`.
 
 ### `buildPanelModel(printers, statusesByKey, selectedKey, now) → PanelModel`
 
 Monta o conteúdo do painel ([../data-model.md](../data-model.md#panelmodel-derivado-para-o-painel-buildpanelmodel),
-[display.md](./display.md#painel)). Em `offline`, `freshnessText` é `"sem resposta há 3 min"`;
-fora de offline, `"atualizado há <1 min"`. `rows` fica vazio com uma impressora só.
+[display.md](./display.md#painel)). Em `offline`, `freshnessText` é `"no response for 3 min"`;
+fora de offline, `"updated <1 min ago"`. `rows` fica vazio com uma impressora só.
 
 ### `tidyMessage(text) → string`
 
@@ -180,15 +187,16 @@ linha em branco, junta as linhas dentro de cada parágrafo e reduz espaços repe
 
 ### `stateLabel(state) → string`
 
-`printing` → "imprimindo", `paused` → "pausada", `idle` → "ociosa", `error` → "erro",
-`offline` → "offline".
+`printing` → "printing", `paused` → "paused", `idle` → "idle", `error` → "error",
+`offline` → "offline" (valores de `TEXT.states`).
 
-### `formatTemp(t) → string`, `formatDuration(sec) → string`, `formatAgo(ms) → string`
+### `formatTemp(t) → string`, `formatDuration(sec) → string`, `formatElapsed(ms) → string`
 
 - `formatTemp({current:214.8, target:215})` → `"215/215 °C"`; `target` 0 → `"25 °C"`;
   `null` → `"—"`.
 - `formatDuration(3725)` → `"1h 02m"`; `59` → `"<1m"`; `null` → `"—"`.
-- `formatAgo(95000)` → `"há 1 min"`; `< 60000` → `"há <1 min"`.
+- `formatElapsed(95000)` → `"1 min"`; `< 60000` → `"<1 min"`; `2 h 5 s` → `"2 h"`. Quem chama
+  monta a frase (`"updated %1 ago"`, `"no response for %1"`).
 
 ## Cobertura de teste exigida
 

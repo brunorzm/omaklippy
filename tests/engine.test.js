@@ -18,9 +18,9 @@ test("reconcileStatuses creates initial statuses and marks invalid printers offl
   const ps = printers()
   const s = M.reconcileStatuses({}, ps)
   assert.deepEqual(Object.keys(s).sort(), ps.map(p => p.key).sort())
-  assert.equal(s[ps[0].key].reason, "aguardando primeira resposta")
+  assert.equal(s[ps[0].key].reason, "waiting for first response")
   assert.equal(s[ps[2].key].state, "offline")
-  assert.equal(s[ps[2].key].reason, "endereço inválido")
+  assert.equal(s[ps[2].key].reason, "invalid address")
 })
 
 test("reconcileStatuses keeps existing statuses, drops removed keys and does not mutate its input", () => {
@@ -85,8 +85,8 @@ test("guard fires → offline; a late onExited with the same seq is ignored", ()
   const ps = printers()
   const key = ps[0].key
   const d = M.planDispatch(M.reconcileStatuses({}, ps), ps, 3000)
-  const guarded = M.acceptResult(d.statuses, key, 1, { reachable: false, errorMessage: "sem resposta (tempo limite)" }, 4000)
+  const guarded = M.acceptResult(d.statuses, key, 1, { reachable: false, errorMessage: "no response (timeout)" }, 4000)
   assert.equal(guarded[key].state, "offline")
-  assert.equal(guarded[key].reason, "sem resposta (tempo limite)")
+  assert.equal(guarded[key].reason, "no response (timeout)")
   assert.equal(M.acceptResult(guarded, key, 1, reading("printing.synthetic"), 4100), guarded)
 })

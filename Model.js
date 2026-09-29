@@ -7,6 +7,41 @@
 // nf-md-printer_3d from the bar's Nerd Font.
 var PRINTER_GLYPH = "\u{f042b}"
 
+// Every text the user sees, in one place.
+var TEXT = {
+  states: { printing: "printing", paused: "paused", idle: "idle", error: "error", offline: "offline" },
+  invalidAddress: "invalid address",
+  hostNotFound: "host not found",
+  connectionRefused: "connection refused",
+  noResponseTimeout: "no response (timeout)",
+  noResponse: "no response",
+  networkError: "network error (curl %1)",
+  curlNotFound: "curl not found",
+  unauthorized: "unauthorized — allow this computer in trusted_clients",
+  unexpectedResponse: "unexpected response",
+  klipperState: "Klipper: %1",
+  unknown: "unknown",
+  printError: "print error",
+  waitingFirstResponse: "waiting for first response",
+  noPrinters: "no printers configured",
+  noPrintersTooltip: "OmaKlippy — no printers configured",
+  updatedAgo: "updated %1 ago",
+  noResponseFor: "no response for %1",
+  setupPrinterName: "My printer",
+  panel: {
+    addPrinterWith: "Add a printer with:",
+    file: "File",
+    remaining: "Remaining",
+    nozzle: "Nozzle",
+    bed: "Bed",
+    printers: "PRINTERS"
+  }
+}
+
+function fill(template, value) {
+  return template.replace("%1", String(value))
+}
+
 var DEFAULT_INTERVAL_SEC = 5
 var DEFAULT_TIMEOUT_SEC = 3
 
@@ -114,7 +149,7 @@ function normalizePrinters(list) {
       name: name,
       address: item.address,
       baseUrl: baseUrl,
-      invalidReason: baseUrl === "" ? "endereço inválido" : "",
+      invalidReason: baseUrl === "" ? TEXT.invalidAddress : "",
       displayName: name !== "" ? name : (baseUrl !== "" ? hostOf(baseUrl) : item.address.trim())
     })
   }
@@ -187,13 +222,11 @@ function heater(obj) {
 }
 
 var CURL_OFFLINE_MESSAGES = {
-  3: "endereço inválido",
-  6: "host não encontrado",
-  7: "conexão recusada",
-  28: "sem resposta (tempo limite)"
+  3: TEXT.invalidAddress,
+  6: TEXT.hostNotFound,
+  7: TEXT.connectionRefused,
+  28: TEXT.noResponseTimeout
 }
-
-var UNAUTHORIZED_MESSAGE = "acesso não autorizado — libere este computador em trusted_clients"
 
 // stdout is the raw curl output: body, "\n", then the %{http_code} line.
 // The curl exit code is checked first (the code line reads 000 without a
@@ -203,12 +236,12 @@ function parseResponse(stdout, exitCode) {
   var exit = typeof exitCode === "number" ? exitCode : -1
 
   if (exit === -1 || exit === 127) {
-    r.errorMessage = "curl não encontrado"
+    r.errorMessage = TEXT.curlNotFound
     return r
   }
   if (exit !== 0) {
     r.reachable = false
-    r.errorMessage = CURL_OFFLINE_MESSAGES[exit] || ("falha de rede (curl " + exit + ")")
+    r.errorMessage = CURL_OFFLINE_MESSAGES[exit] || fill(TEXT.networkError, exit)
     return r
   }
 
@@ -222,7 +255,7 @@ function parseResponse(stdout, exitCode) {
   try { data = JSON.parse(body) } catch (e) { data = null }
 
   if (r.httpStatus === 401 || r.httpStatus === 403) {
-    r.errorMessage = UNAUTHORIZED_MESSAGE
+    r.errorMessage = TEXT.unauthorized
     return r
   }
   if (r.httpStatus >= 400 || r.httpStatus === 0) {
@@ -231,7 +264,7 @@ function parseResponse(stdout, exitCode) {
     return r
   }
   if (!(isObject(data) && isObject(data.result) && isObject(data.result.status))) {
-    r.errorMessage = "resposta inesperada"
+    r.errorMessage = TEXT.unexpectedResponse
     return r
   }
 
@@ -258,11 +291,11 @@ function deriveState(reading) {
   if (r.reachable === false) return { state: "offline", reason: stringOr(r.errorMessage, "") }
   if (r.errorMessage) return { state: "error", reason: r.errorMessage }
   if (r.klippyState !== "ready") {
-    return { state: "error", reason: r.klippyMessage || ("Klipper: " + (r.klippyState || "desconhecido")) }
+    return { state: "error", reason: r.klippyMessage || fill(TEXT.klipperState, r.klippyState || TEXT.unknown) }
   }
   if (r.printState === "printing") return { state: "printing", reason: "" }
   if (r.printState === "paused") return { state: "paused", reason: "" }
-  if (r.printState === "error") return { state: "error", reason: r.printMessage || "erro na impressão" }
+  if (r.printState === "error") return { state: "error", reason: r.printMessage || TEXT.printError }
   return { state: "idle", reason: "" }
 }
 
@@ -284,13 +317,7 @@ function estimateRemaining(state, progress, printDuration) {
 }
 
 function stateLabel(state) {
-  switch (state) {
-  case "printing": return "imprimindo"
-  case "paused": return "pausada"
-  case "idle": return "ociosa"
-  case "error": return "erro"
-  default: return "offline"
-  }
+  return TEXT.states.hasOwnProperty(state) ? TEXT.states[state] : TEXT.states.offline
 }
 
 // ---- Status
@@ -299,7 +326,7 @@ function initialStatus(key) {
   return {
     key: key,
     state: "offline",
-    reason: "aguardando primeira resposta",
+    reason: TEXT.waitingFirstResponse,
     percent: null,
     remainingSec: null,
     filename: "",
@@ -314,7 +341,7 @@ function initialStatus(key) {
 
 function applyReading(prev, reading, now) {
   var base = isObject(prev) ? copy(prev) : initialStatus("")
-  var r = isObject(reading) ? reading : { reachable: false, errorMessage: "sem resposta" }
+  var r = isObject(reading) ? reading : { reachable: false, errorMessage: TEXT.noResponse }
   var d = deriveState(r)
   base.state = d.state
   base.reason = d.reason
@@ -433,7 +460,7 @@ function buildIconState(printers, statusesByKey, selectedKey) {
     }
   }
   if (!top) top = pickHighlighted(list, statusesByKey)
-  if (!top) return { mode: "empty", progress: null, tooltip: "OmaKlippy — nenhuma impressora configurada" }
+  if (!top) return { mode: "empty", progress: null, tooltip: TEXT.noPrintersTooltip }
   var st = top.status
   var progress = hasJob(st.state) && finiteOrNull(st.percent) !== null ? st.percent / 100 : null
   return { mode: st.state, progress: progress, tooltip: summaryLine(top.printer, st) }
@@ -443,7 +470,7 @@ function buildIconState(printers, statusesByKey, selectedKey) {
 // IPC argument parser behind `omarchy bar set` splits JSON lists.
 function setupCommand() {
   return "omarchy bar set io.github.brunorzm.omaklippy printers " +
-    "'[{\"name\":\"Minha impressora\",\"address\":\"192.168.1.50\"}]'"
+    "'[{\"name\":\"" + TEXT.setupPrinterName + "\",\"address\":\"192.168.1.50\"}]'"
 }
 
 // ---- Formatting
@@ -466,11 +493,11 @@ function formatDuration(sec) {
   return h + "h " + (m < 10 ? "0" : "") + m + "m"
 }
 
-function formatAgo(ms) {
+function formatElapsed(ms) {
   var t = finiteOrNull(ms)
-  if (t === null || t < 60000) return "há <1 min"
-  if (t < 3600000) return "há " + Math.floor(t / 60000) + " min"
-  return "há " + Math.floor(t / 3600000) + " h"
+  if (t === null || t < 60000) return "<1 min"
+  if (t < 3600000) return Math.floor(t / 60000) + " min"
+  return Math.floor(t / 3600000) + " h"
 }
 
 // Klipper hard-wraps its messages: keep blank-line paragraphs, join the
@@ -503,9 +530,9 @@ function detailFor(printer, status, now) {
   if (job && status.percent !== null && status.percent !== undefined) meta += " · " + status.percent + "%"
   var freshness = ""
   if (status.state === "offline") {
-    if (finiteOrNull(status.offlineSince) !== null) freshness = "sem resposta " + formatAgo(now - status.offlineSince)
+    if (finiteOrNull(status.offlineSince) !== null) freshness = fill(TEXT.noResponseFor, formatElapsed(now - status.offlineSince))
   } else if (finiteOrNull(status.lastSeenAt) !== null) {
-    freshness = "atualizado " + formatAgo(now - status.lastSeenAt)
+    freshness = fill(TEXT.updatedAgo, formatElapsed(now - status.lastSeenAt))
   }
   return {
     key: printer.key,
@@ -551,6 +578,7 @@ function buildPanelModel(printers, statusesByKey, selectedKey, now) {
 if (typeof module !== "undefined") {
   module.exports = {
     PRINTER_GLYPH: PRINTER_GLYPH,
+    TEXT: TEXT,
     readSettings: readSettings,
     normalizeAddress: normalizeAddress,
     normalizePrinters: normalizePrinters,
@@ -571,7 +599,7 @@ if (typeof module !== "undefined") {
     buildIconState: buildIconState,
     formatTemp: formatTemp,
     formatDuration: formatDuration,
-    formatAgo: formatAgo,
+    formatElapsed: formatElapsed,
     resolveSelection: resolveSelection,
     buildPanelModel: buildPanelModel,
     setupCommand: setupCommand,

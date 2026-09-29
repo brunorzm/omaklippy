@@ -67,4 +67,4 @@ com o próprio comando de `buildCurlArgs`. As sintéticas levam o sufixo `.synth
 | `no-heater-bed.synthetic` | resposta sem `heater_bed` | `bed: null`, sem erro |
 | `timeout` | exitCode 28, stdout `"000"` | `offline` |
 | `refused` | exitCode 7 | `offline` |
-| `garbage.synthetic` | 200 com HTML | `error` "resposta inesperada" |
+| `garbage.synthetic` | 200 com HTML | `error` "unexpected response" |

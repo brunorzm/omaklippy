@@ -27,7 +27,7 @@ Derivado na carga (`normalizePrinters`):
 | `key` | `baseUrl + "#" + índice`: identidade estável dentro da lista (nomes podem repetir). |
 | `order` | Índice na lista (desempate do destaque). |
 | `baseUrl` | URL normalizada, ou `""` se inválida. |
-| `invalidReason` | `"endereço inválido"` quando `baseUrl === ""`. |
+| `invalidReason` | `"invalid address"` quando `baseUrl === ""`. |
 | `displayName` | Nome exibido; recebe ` (host)` quando o nome se repete (`disambiguateNames`). |
 
 ## Reading (resultado de uma consulta; produzido por `parseResponse`)
@@ -62,7 +62,7 @@ Derivado na carga (`normalizePrinters`):
 | `pending` | bool | Há requisição em voo para esta impressora. |
 | `seq` | inteiro | Número da última requisição disparada. |
 
-Estado inicial (antes da 1ª resposta, `initialStatus`): `state: "offline"`, `reason: "aguardando primeira
+Estado inicial (antes da 1ª resposta, `initialStatus`): `state: "offline"`, `reason: "waiting for first
 resposta"`, `offlineSince: null`. Assim nunca aparece dado não confirmado.
 
 ### Transições
@@ -75,7 +75,7 @@ disparo do ciclo:   { statuses, requests } = planDispatch(statuses, printers, ti
 Process termina:    statuses = acceptResult(statuses, key, seq, parseResponse(...), now)
                     (ignorado se seq ≠ atual ou pending já é false)
 guarda (timeout+1s): mata o Process;
-                    statuses = acceptResult(statuses, key, seq, {reachable:false, "sem resposta"}, now)
+                    statuses = acceptResult(statuses, key, seq, {reachable:false, "no response (timeout)"}, now)
 ```
 
 `applyReading(prev, reading, now)`:
@@ -104,7 +104,7 @@ Qualquer estado pode ir para qualquer outro; não há estados intermediários.
 |-------|------|-----------|
 | `mode` | enum | `empty` \| `idle` \| `printing` \| `paused` \| `error` \| `offline`, da impressora de `selectedKey` ou, sem escolha, da escolhida por `pickHighlighted`. |
 | `progress` | 0–1 ou `null` | Fração para a barra do ícone (`percent / 100`); só em `printing`/`paused`. |
-| `tooltip` | string | Uma linha: `"Voron — imprimindo 42%"` (FR-005). |
+| `tooltip` | string | Uma linha: `"Voron — printing 42%"` (FR-005). |
 
 Mapeamento visual em [contracts/display.md](./contracts/display.md#ícone-na-barra).
 

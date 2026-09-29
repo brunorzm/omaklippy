@@ -62,15 +62,15 @@ Durante todos os cenários, a barra mostra **só o ícone**, nunca texto.
 
 **US1, de relance na barra**
 
-1. Ociosa: só o glifo; o tooltip é `Voron — ociosa`.
-2. Inicie uma impressão: a barra fina sob o glifo avança; o tooltip é `Voron — imprimindo N%`.
+1. Ociosa: só o glifo; o tooltip é `Voron — idle`.
+2. Inicie uma impressão: a barra fina sob o glifo avança; o tooltip é `Voron — printing N%`.
 3. `PAUSE`: o preenchimento fica atenuado (distinguível) em até 5 s. `RESUME`: volta ao normal.
 4. Fim ou `CANCEL_PRINT`: o indicador some.
 5. Troque o tema do Omarchy: o ícone e a barra acompanham as cores novas.
 
 **US3, painel de detalhes**
 
-1. Clique no ícone: o painel abre ancorado no ícone, com nome, "imprimindo · N%", barra de
+1. Clique no ícone: o painel abre ancorado no ícone, com nome, "printing · N%", barra de
    progresso, arquivo, restante e bico/mesa atual/alvo, iguais aos da interface web (±1 ciclo).
 2. Com o painel aberto, os valores se atualizam sozinhos.
 3. Nos primeiros segundos da impressão (progresso < 1%): restante "—".
@@ -80,11 +80,11 @@ Durante todos os cenários, a barra mostra **só o ícone**, nunca texto.
 **US2, inacessível e erro**
 
 1. Desligue a impressora ou o Pi: o ícone fica esmaecido em até 8 s; o painel mostra "offline",
-   o motivo e "sem resposta há X min", sem temperaturas.
+   o motivo e "no response for X min", sem temperaturas.
 2. Desligue o Wi-Fi do computador: tudo fica offline. Religue: volta sozinho.
 3. Endereço errado (`10.255.255.1`): offline por tempo limite. Endereço inválido (`"a b"`):
-   offline com o motivo "endereço inválido".
-4. `M112`: o ícone fica na cor de alerta do tema; o painel mostra "erro" e a mensagem do Klipper.
+   offline com o motivo "invalid address".
+4. `M112`: o ícone fica na cor de alerta do tema; o painel mostra "error" e a mensagem do Klipper.
    `FIRMWARE_RESTART`: volta a ociosa.
 5. `sudo systemctl stop klipper` **no Pi**: erro "Klippy Host not connected". Depois, `start`.
 6. Tire temporariamente o IP de `trusted_clients` e reinicie o Moonraker: erro "acesso não
@@ -94,7 +94,7 @@ Durante todos os cenários, a barra mostra **só o ícone**, nunca texto.
 inexistente para simular)
 
 1. O ícone representa a mais relevante (erro > imprimindo > pausada > offline > ociosa).
-2. O painel abre com essa selecionada e a lista "Impressoras" mostra todas.
+2. O painel abre com essa selecionada e a lista "PRINTERS" mostra todas.
 3. Selecione outra com clique; depois com j/k + Enter: o detalhe troca.
 4. Feche e reabra o painel: a escolha é mantida. Reinicie o shell: volta à mais relevante.
 5. Duas entradas com o mesmo nome: a lista mostra `Nome (host)` para as duas.

@@ -92,7 +92,7 @@ test("normalizePrinters derives key, order, baseUrl, invalidReason and displayNa
   assert.equal(list[0].displayName, "Voron")
   assert.equal(list[1].displayName, "ender.local:7125", "nome vazio → host da URL")
   assert.equal(list[2].baseUrl, "")
-  assert.equal(list[2].invalidReason, "endereço inválido")
+  assert.equal(list[2].invalidReason, "invalid address")
   assert.equal(list[2].displayName, "Bad")
 })
 

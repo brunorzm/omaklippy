@@ -44,18 +44,18 @@ test("buildIconState without printers", () => {
   assert.deepEqual(M.buildIconState([], {}), {
     mode: "empty",
     progress: null,
-    tooltip: "OmaKlippy — nenhuma impressora configurada",
+    tooltip: "OmaKlippy — no printers configured",
   })
 })
 
 test("buildIconState for each mode", () => {
   const cases = [
-    ["printing", { percent: 42 }, 0.42, "P0 — imprimindo 42%"],
-    ["paused", { percent: 42 }, 0.42, "P0 — pausada 42%"],
-    ["idle", {}, null, "P0 — ociosa"],
-    ["error", {}, null, "P0 — erro"],
+    ["printing", { percent: 42 }, 0.42, "P0 — printing 42%"],
+    ["paused", { percent: 42 }, 0.42, "P0 — paused 42%"],
+    ["idle", {}, null, "P0 — idle"],
+    ["error", {}, null, "P0 — error"],
     ["offline", {}, null, "P0 — offline"],
-    ["printing", { percent: null }, null, "P0 — imprimindo"],
+    ["printing", { percent: null }, null, "P0 — printing"],
   ]
   for (const [state, extra, progress, tooltip] of cases) {
     const { printers, statuses } = fleet([state], [extra])
@@ -68,7 +68,7 @@ test("buildIconState for each mode", () => {
 
 test("buildIconState shows the highlighted printer", () => {
   const { printers, statuses } = fleet(["idle", "printing"], [{}, { percent: 10 }])
-  assert.equal(M.buildIconState(printers, statuses).tooltip, "P1 — imprimindo 10%")
+  assert.equal(M.buildIconState(printers, statuses).tooltip, "P1 — printing 10%")
 })
 
 test("buildIconState from empty settings is the empty mode", () => {
@@ -81,7 +81,7 @@ test("buildIconState follows a manual selection from the panel", () => {
   const icon = M.buildIconState(printers, statuses, printers[1].key)
   assert.equal(icon.mode, "printing")
   assert.equal(icon.progress, 0.27)
-  assert.equal(icon.tooltip, "P1 — imprimindo 27%")
+  assert.equal(icon.tooltip, "P1 — printing 27%")
 })
 
 test("buildIconState falls back to the most relevant without a (valid) selection", () => {
@@ -89,4 +89,9 @@ test("buildIconState falls back to the most relevant without a (valid) selection
   assert.equal(M.buildIconState(printers, statuses, "").mode, "error")
   assert.equal(M.buildIconState(printers, statuses, "gone#9").mode, "error")
   assert.equal(M.buildIconState(printers, statuses).mode, "error")
+})
+
+test("every user-facing text is English (no Portuguese left in TEXT)", () => {
+  const all = JSON.stringify(M.TEXT)
+  assert.doesNotMatch(all, /[áàâãéêíóôõúç]|imprimindo|pausada|ociosa|impressora|resposta/i)
 })

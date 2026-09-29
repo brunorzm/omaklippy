@@ -30,10 +30,10 @@ test("formatDuration", () => {
   assert.equal(M.formatDuration(null), "—")
 })
 
-test("formatAgo", () => {
-  assert.equal(M.formatAgo(95000), "há 1 min")
-  assert.equal(M.formatAgo(30000), "há <1 min")
-  assert.equal(M.formatAgo(2 * 3600 * 1000 + 5000), "há 2 h")
+test("formatElapsed", () => {
+  assert.equal(M.formatElapsed(95000), "1 min")
+  assert.equal(M.formatElapsed(30000), "<1 min")
+  assert.equal(M.formatElapsed(2 * 3600 * 1000 + 5000), "2 h")
 })
 
 test("resolveSelection without a manual choice follows pickHighlighted", () => {
@@ -55,15 +55,15 @@ test("buildPanelModel while printing", () => {
   assert.equal(s.key, key)
   assert.equal(s.displayName, "Voron")
   assert.equal(s.state, "printing")
-  assert.equal(s.stateLabel, "imprimindo")
-  assert.equal(s.metaText, "imprimindo · 42%")
+  assert.equal(s.stateLabel, "printing")
+  assert.equal(s.metaText, "printing · 42%")
   assert.equal(s.percent, 42)
   assert.equal(s.filename, "hook.gcode")
   assert.equal(s.remainingText, "26m")
   assert.equal(s.nozzleText, "215/215 °C")
   assert.equal(s.bedText, "60/60 °C")
   assert.equal(s.showTemps, true)
-  assert.equal(s.freshnessText, "atualizado há <1 min")
+  assert.equal(s.freshnessText, "updated <1 min ago")
   assert.equal(s.reason, "")
 })
 
@@ -71,7 +71,7 @@ test("buildPanelModel while paused keeps the job block", () => {
   const { printers, statuses } = single("paused.synthetic", 1000)
   const m = M.buildPanelModel(printers, statuses, "", 1000)
   assert.equal(m.showJob, true)
-  assert.equal(m.selected.metaText, "pausada · 42%")
+  assert.equal(m.selected.metaText, "paused · 42%")
 })
 
 test("buildPanelModel shows '—' when the remaining time is unknown", () => {
@@ -84,7 +84,7 @@ test("buildPanelModel when idle hides the job block but keeps temperatures", () 
   const { printers, statuses } = single("standby", 1000)
   const m = M.buildPanelModel(printers, statuses, "", 1000)
   assert.equal(m.showJob, false)
-  assert.equal(m.selected.metaText, "ociosa")
+  assert.equal(m.selected.metaText, "idle")
   assert.equal(m.selected.showTemps, true)
 })
 
@@ -92,26 +92,26 @@ test("buildPanelModel on error shows the reason", () => {
   const { printers, statuses } = single("klippy-disconnected.synthetic", 1000)
   const m = M.buildPanelModel(printers, statuses, "", 1000)
   assert.equal(m.showJob, false)
-  assert.equal(m.selected.metaText, "erro")
+  assert.equal(m.selected.metaText, "error")
   assert.equal(m.selected.reason, "Klippy Host not connected")
   assert.equal(m.selected.showTemps, false)
 })
 
-test("buildPanelModel offline: reason, no data, 'sem resposta há'", () => {
+test("buildPanelModel offline: reason, no data, 'no response for'", () => {
   const { printers, statuses } = single("timeout", 1000, M.applyReading(M.initialStatus("x"), reading("printing.synthetic"), 500))
   const m = M.buildPanelModel(printers, statuses, "", 1000 + 180000)
   assert.equal(m.showJob, false)
   assert.equal(m.selected.metaText, "offline")
-  assert.equal(m.selected.reason, "sem resposta (tempo limite)")
+  assert.equal(m.selected.reason, "no response (timeout)")
   assert.equal(m.selected.showTemps, false)
-  assert.equal(m.selected.freshnessText, "sem resposta há 3 min")
+  assert.equal(m.selected.freshnessText, "no response for 3 min")
 })
 
 test("buildPanelModel before the first answer", () => {
   const { printers, statuses } = single(null, 0)
   const m = M.buildPanelModel(printers, statuses, "", 1000)
   assert.equal(m.selected.metaText, "offline")
-  assert.equal(m.selected.reason, "aguardando primeira resposta")
+  assert.equal(m.selected.reason, "waiting for first response")
   assert.equal(m.selected.freshnessText, "")
 })
 
@@ -142,7 +142,7 @@ test("buildPanelModel lists every printer in registration order", () => {
   const { printers, statuses } = fleet()
   const m = M.buildPanelModel(printers, statuses, "", 1000)
   assert.deepEqual(m.rows.map(r => r.displayName), ["Voron", "Ender", "Prusa"])
-  assert.deepEqual(m.rows.map(r => r.stateLabel), ["ociosa", "imprimindo", "offline"])
+  assert.deepEqual(m.rows.map(r => r.stateLabel), ["idle", "printing", "offline"])
   assert.deepEqual(m.rows.map(r => r.percentText), ["", "42%", ""])
   assert.deepEqual(m.rows.map(r => r.selected), [false, true, false], "defaults to the highlighted printer")
   assert.equal(m.rows[0].key, printers[0].key)
@@ -163,7 +163,7 @@ test("buildPanelModel without printers is the empty state", () => {
 test("setupCommand is the exact command shown in the empty panel", () => {
   assert.equal(
     M.setupCommand(),
-    `omarchy bar set io.github.brunorzm.omaklippy printers '[{"name":"Minha impressora","address":"192.168.1.50"}]'`
+    `omarchy bar set io.github.brunorzm.omaklippy printers '[{"name":"My printer","address":"192.168.1.50"}]'`
   )
 })
 

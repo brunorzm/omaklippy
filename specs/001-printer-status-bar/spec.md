@@ -34,6 +34,14 @@ para trocar a impressora exibida. Os botões de ação desse painel ficam para a
   vale só na sessão do shell. Consequência aceita: com uma escolha manual ativa, um erro em outra
   impressora só aparece no painel.
 
+### Session 2026-09-29 (idioma)
+
+- Q: Em que idioma ficam os textos exibidos ao usuário? → A: inglês, porque o plugin será
+  compartilhado mundialmente. Os estados aparecem como `printing` (imprimindo), `paused`
+  (pausada), `idle` (ociosa), `error` (erro) e `offline`. Esta spec continua em português e usa os
+  nomes em português como nomes de conceito; os textos exatos da interface estão em
+  [contracts/display.md](./contracts/display.md) e [contracts/model-api.md](./contracts/model-api.md).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ver de relance na barra se a impressão vai bem (Priority: P1)
@@ -311,6 +319,8 @@ uma e verificar que ela some do painel.
 - O tempo restante é estimado a partir do progresso e do tempo de impressão informados pela
   impressora.
 - Temperaturas em graus Celsius, sem casas decimais.
+- Todos os textos da interface, mensagens e README estão em inglês; os textos ficam centralizados
+  em `Model.TEXT` para facilitar uma tradução futura.
 - A atualização é por consulta periódica; atualização em tempo real está fora de escopo.
 - Fora de escopo nesta fatia: ações de controle, notificações, descoberta automática e
   atualização em tempo real.

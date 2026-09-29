@@ -147,7 +147,7 @@ Panel {
           PanelHero {
             width: parent.width
             title: root.panelModel.empty ? "OmaKlippy" : root.selected.displayName
-            meta: root.panelModel.empty ? "nenhuma impressora configurada" : root.selected.metaText
+            meta: root.panelModel.empty ? Model.TEXT.noPrinters : root.selected.metaText
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconOpacity: root.selected.state === "offline" || root.panelModel.empty ? 0.5 : 1.0
@@ -171,7 +171,7 @@ Panel {
               width: parent.width
               textFormat: Text.PlainText
               wrapMode: Text.WordWrap
-              text: "Cadastre uma impressora com:"
+              text: Model.TEXT.panel.addPrinterWith
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
@@ -253,12 +253,12 @@ Panel {
             }
 
             InfoRow {
-              label: "Arquivo"
+              label: Model.TEXT.panel.file
               value: root.selected.filename || "—"
             }
 
             InfoRow {
-              label: "Restante"
+              label: Model.TEXT.panel.remaining
               value: root.selected.remainingText || "—"
             }
           }
@@ -274,12 +274,12 @@ Panel {
             spacing: Style.space(8)
 
             InfoRow {
-              label: "Bico"
+              label: Model.TEXT.panel.nozzle
               value: root.selected.nozzleText || "—"
             }
 
             InfoRow {
-              label: "Mesa"
+              label: Model.TEXT.panel.bed
               value: root.selected.bedText || "—"
             }
           }
@@ -295,7 +295,7 @@ Panel {
             spacing: Style.space(4)
 
             PanelSectionHeader {
-              text: "IMPRESSORAS"
+              text: Model.TEXT.panel.printers
               foreground: root.foreground
               fontFamily: root.fontFamily
             }

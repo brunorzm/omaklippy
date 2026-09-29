@@ -117,7 +117,7 @@ BarWidget {
     onTriggered: root.refresh()
   }
 
-  // Keeps "atualizado há …" honest while the panel is open.
+  // Keeps "updated … ago" honest while the panel is open.
   Timer {
     interval: 15000
     repeat: true
@@ -213,7 +213,8 @@ BarWidget {
         id: guard
         interval: request.guardMs
         running: true
-        onTriggered: request.complete({ reachable: false, errorMessage: "sem resposta (tempo limite)" })
+        // Same outcome as curl giving up on its own (exit 28).
+        onTriggered: request.complete(Model.parseResponse("", 28))
       }
     }
   }
