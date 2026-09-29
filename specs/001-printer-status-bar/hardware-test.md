@@ -17,7 +17,7 @@ Legenda: [x] verificado · [~] verificado com o Moonraker falso local (fixtures)
 impressora real · [ ] pendente.
 
 ```text
-US1 ícone:    [x] ociosa (Voron real)  [x] imprimindo (Voron real, aquecendo a câmara: 0%)  [~] pausada  [x] fim (Voron real: `complete` → ociosa)  [ ] cancelado  [x] troca de tema (Catppuccin Latte e Tokyo Night: ícone, selo vermelho de erro e painel acompanham)
+US1 ícone:    [x] ociosa (Voron real)  [x] imprimindo (Voron real, aquecendo a câmara: 0%)  [x] pausada (Voron real: painel "pausada · 2%", restante 20m; ícone com preenchimento atenuado, pouco visível com progresso baixo)  [x] fim (Voron real: `complete` → ociosa)  [x] cancelado (Voron real: `paused` → `standby` direto; o macro de cancelamento dela não emite `cancelled`) → ociosa  [x] troca de tema (Catppuccin Latte e Tokyo Night: ícone, selo vermelho de erro e painel acompanham)
               [x] barra vertical (com o Moonraker falso)
 US2 falhas:   [x] desligada (Biqu B1 na tomada: offline em ≤ 8 s, sem dados antigos, volta sozinha como erro)  [ ] Wi-Fi  [~] sem resposta (servidor travado)  [x] endereço inexistente
               [x] shutdown real do MCU (Biqu B1: termistor do bico fora da faixa; ícone com selo e mensagem do Klipper legível no painel)  [x] FIRMWARE_RESTART real na Voron (~5 s: 503 "Klippy Disconnected" → 503 "Klippy Host not connected" → 200 `startup` → ready; o plugin mostra erro com mensagem legível e volta sozinho)  [ ] M112  [x] klipper parado (503 real na Biqu B1: "Klippy Host not connected", sem temperaturas)  [x] 401 real (Biqu B1 sem 192.168.0.0/16 em trusted_clients)  [x] curl ausente (binário inexistente)
@@ -33,11 +33,10 @@ Desempenho:   [x] 5 impressoras (3 inexistentes): no máximo 3 curl simultâneos
 
 ## Pendências para concluir a fatia
 
-1. Na Voron: pausa/retomada e cancelamento (opcionais, mexem numa impressão real).
 2. `FIRMWARE_RESTART` na Biqu → volta a ociosa.
 4. Desligar o Wi-Fi do computador → tudo offline e volta sozinho (fazer por último; derruba a sessão do assistente).
-9. Capturar as fixtures reais que faltam (T048): `paused`, `cancelled` (opcionais, exigem
-   interferir numa impressão real). Já reais: `standby`, `printing`, `complete`, `shutdown`,
+9. Fixture real de `cancelled`: não obtida; o macro de cancelamento da Voron leva direto a
+   `standby`. Fica a sintética. Já reais: `standby`, `printing`, `paused`, `complete`, `shutdown`,
    `klippy-disconnected`, `klippy-restarting`, `startup`, `unauthorized`.
 
 10. ~~Investigar configurações vazias depois de reconectar o monitor~~ **Diagnosticado (bug do
@@ -47,7 +46,12 @@ Desempenho:   [x] 5 impressoras (3 inexistentes): no máximo 3 curl simultâneos
     entrySettings(entry)`). Reproduzido: com a Biqu renomeada ao vivo para "Biqu B1 (teste)",
     depois de reconectar o monitor a instância recriada mostrou "Biqu B1", embora o `shell.json`
     e o `listShellConfig` tivessem o nome novo. Contorno: `omarchy-restart-shell` depois de mudar
-    configurações. Não é corrigível no plugin.
+    configurações. Não é corrigível no plugin. Visto de novo: a instância recriada também não
+    recebe mudanças feitas **depois** da recriação (o nome "(teste)" continuou no monitor externo
+    após restaurar "Biqu B1" no `shell.json`).
+
+Melhoria possível (não bloqueia): distinguir melhor "pausada" no ícone com progresso baixo
+(p.ex. um marcador de pausa), já apontado na análise (U1).
 
 Observações: o tema em uso tem `urgent` = `#565d60` (cinza), por isso o erro ganhou um selo além
 da cor.

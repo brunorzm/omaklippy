@@ -147,3 +147,11 @@ test("real Voron capture right after the print finished (complete) → idle", ()
   assert.deepEqual(M.deriveState(r), { state: "idle", reason: "" })
   assert.equal(M.computePercent("idle", r.progress), null)
 })
+
+test("real Voron capture while paused → paused, remaining frozen but known", () => {
+  const r = parse("paused")
+  assert.equal(r.printState, "paused")
+  assert.equal(M.deriveState(r).state, "paused")
+  assert.equal(M.computePercent("paused", r.progress), 2)
+  assert.ok(M.estimateRemaining("paused", r.progress, r.printDuration) > 0)
+})
