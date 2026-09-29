@@ -166,3 +166,21 @@ test("setupCommand is the exact command shown in the empty panel", () => {
     `omarchy bar set io.github.brunorzm.omaklippy printers '[{"name":"Minha impressora","address":"192.168.1.50"}]'`
   )
 })
+
+test("tidyMessage joins hard-wrapped lines inside each paragraph", () => {
+  assert.equal(M.tidyMessage("a\nb  c\n\n\nd\n e\n"), "a b c\n\nd e")
+  assert.equal(M.tidyMessage("   "), "")
+  assert.equal(M.tidyMessage(null), "")
+})
+
+test("buildPanelModel tidies the real BIQU shutdown message", () => {
+  const { printers, statuses } = single("shutdown", 1000)
+  const reason = M.buildPanelModel(printers, statuses, "", 1000).selected.reason
+  assert.deepEqual(reason.split("\n\n"), [
+    "MCU 'mcu' shutdown: ADC out of range",
+    "Sensor 'extruder' temperature -93.855 not in range 0.000:280.000",
+    "This generally occurs when a heater temperature exceeds its configured min_temp or max_temp. " +
+      "Once the underlying issue is corrected, use the \"FIRMWARE_RESTART\" command to reset the firmware, " +
+      "reload the config, and restart the host software. Printer is shutdown",
+  ])
+})

@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\":{\"eventtime\":3486.522636718,\"status\":{\"webhooks\":{\"state\":\"ready\",\"state_message\":\"Printer is ready\"},\"print_stats\":{\"filename\":\"CONE1 60_ABS_11h57m.gcode\",\"total_duration\":205.27808085900006,\"print_duration\":0.0,\"filament_used\":0.0,\"state\":\"printing\",\"message\":\"\",\"info\":{\"total_layer\":null,\"current_layer\":null}},\"virtual_sdcard\":{\"file_path\":\"/home/voron_pi/printer_data/gcodes/CONE1 60_ABS_11h57m.gcode\",\"progress\":0.00438826575674576,\"is_active\":true,\"file_position\":92359,\"file_size\":21046811},\"display_status\":{\"progress\":0.0,\"message\":\"Aquecendo a Camara\"},\"extruder\":{\"temperature\":29.31,\"target\":0.0},\"heater_bed\":{\"temperature\":96.87,\"target\":118.0}}}}\n200"
+}

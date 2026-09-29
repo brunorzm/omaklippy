@@ -123,3 +123,20 @@ test("real Voron standby capture (Klipper v0.13, Moonraker v0.11) parses as idle
   assert.ok(r.nozzle && r.nozzle.target === 0)
   assert.deepEqual(M.deriveState(r), { state: "idle", reason: "" })
 })
+
+test("real Voron capture while heat-soaking: printing, 0%, remaining unknown", () => {
+  const r = parse("printing")
+  assert.equal(M.deriveState(r).state, "printing")
+  assert.equal(r.filename, "CONE1 60_ABS_11h57m.gcode")
+  assert.equal(M.computePercent("printing", r.progress), 0)
+  assert.equal(M.estimateRemaining("printing", r.progress, r.printDuration), null, "print_duration is still 0")
+  assert.deepEqual(r.bed, { current: 96.87, target: 118 })
+})
+
+test("real BIQU capture in MCU shutdown: error with Klipper's message", () => {
+  const r = parse("shutdown")
+  const d = M.deriveState(r)
+  assert.equal(d.state, "error")
+  assert.match(d.reason, /^MCU 'mcu' shutdown: ADC out of range/)
+  assert.equal(r.nozzle.current, -87.76, "keeps the faulty reading, which is the point")
+})

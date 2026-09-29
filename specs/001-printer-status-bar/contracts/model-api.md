@@ -171,6 +171,12 @@ Monta o conteúdo do painel ([../data-model.md](../data-model.md#panelmodel-deri
 [display.md](./display.md#painel)). Em `offline`, `freshnessText` é `"sem resposta há 3 min"`;
 fora de offline, `"atualizado há <1 min"`. `rows` fica vazio com uma impressora só.
 
+### `tidyMessage(text) → string`
+
+Mensagens do Klipper chegam com quebras de linha manuais. Mantém os parágrafos separados por
+linha em branco, junta as linhas dentro de cada parágrafo e reduz espaços repetidos. Não-texto →
+`""`. `buildPanelModel` aplica essa função ao `reason` exibido.
+
 ### `stateLabel(state) → string`
 
 `printing` → "imprimindo", `paused` → "pausada", `idle` → "ociosa", `error` → "erro",

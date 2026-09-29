@@ -464,6 +464,19 @@ function formatAgo(ms) {
   return "há " + Math.floor(t / 3600000) + " h"
 }
 
+// Klipper hard-wraps its messages: keep blank-line paragraphs, join the
+// lines inside each one and collapse runs of spaces.
+function tidyMessage(text) {
+  if (typeof text !== "string") return ""
+  var paragraphs = text.split(/\n\s*\n/)
+  var out = []
+  for (var i = 0; i < paragraphs.length; i++) {
+    var p = paragraphs[i].replace(/\s+/g, " ").trim()
+    if (p !== "") out.push(p)
+  }
+  return out.join("\n\n")
+}
+
 // ---- Panel
 
 function resolveSelection(selectedKey, printers, statusesByKey) {
@@ -491,7 +504,7 @@ function detailFor(printer, status, now) {
     state: status.state,
     stateLabel: stateLabel(status.state),
     metaText: meta,
-    reason: status.reason || "",
+    reason: tidyMessage(status.reason),
     percent: job ? status.percent : null,
     filename: job ? (status.filename || "") : "",
     remainingText: job ? formatDuration(status.remainingSec) : "",
@@ -552,6 +565,7 @@ if (typeof module !== "undefined") {
     formatAgo: formatAgo,
     resolveSelection: resolveSelection,
     buildPanelModel: buildPanelModel,
-    setupCommand: setupCommand
+    setupCommand: setupCommand,
+    tidyMessage: tidyMessage
   }
 }
