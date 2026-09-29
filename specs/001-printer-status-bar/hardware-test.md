@@ -4,54 +4,96 @@ Princípio VII da constituição: a fatia só está concluída com este registro
 [quickstart.md](./quickstart.md).
 
 ```text
-Data:                        2026-09-29 (parcial, durante a implementação)
-Impressora(s) / placa:       Voron (voron.local, 192.168.0.110); Biqu B1 (biqu.local, hostname "biqu")
-Versão do Klipper:           Voron v0.13.0-770-gce7002be-dirty; Biqu v0.13.0-707-gf604aeeea
-Versão do Moonraker:         Voron v0.11.0-1-g1cfb0c4; Biqu v0.10.0-31-gd5ee171
-Acesso:                      200 sem autenticação (este computador está em trusted_clients)
+Data:                  2026-09-29
+Resultado:             APROVADO. Fatia 001 concluída.
+Impressoras:           Voron (voron.local, 192.168.0.110)
+                       Biqu B1 (biqu.local, 192.168.0.100, hostname "biqu")
+Versão do Klipper:     Voron v0.13.0-770-gce7002be-dirty · Biqu v0.13.0-707-gf604aeeea
+Versão do Moonraker:   Voron v0.11.0-1-g1cfb0c4 · Biqu v0.10.0-31-gd5ee171
+Acesso:                sem autenticação (este computador em trusted_clients)
+Omarchy:               4.0.4-1, dois monitores (eDP-1 + DP-3), temas Solitude, Catppuccin Latte, Tokyo Night
 ```
 
-## Verificado na implementação
+## Cenários
 
-Legenda: [x] verificado · [~] verificado com o Moonraker falso local (fixtures), falta na
-impressora real · [ ] pendente.
+Legenda: [x] verificado na impressora real · [s] verificado com o Moonraker falso local
+(fixtures) e coberto por teste automatizado.
 
 ```text
-US1 ícone:    [x] ociosa (Voron real)  [x] imprimindo (Voron real, aquecendo a câmara: 0%)  [x] pausada (Voron real: painel "pausada · 2%", restante 20m; ícone com preenchimento atenuado, pouco visível com progresso baixo)  [x] fim (Voron real: `complete` → ociosa)  [x] cancelado (Voron real: `paused` → `standby` direto; o macro de cancelamento dela não emite `cancelled`) → ociosa  [x] troca de tema (Catppuccin Latte e Tokyo Night: ícone, selo vermelho de erro e painel acompanham)
-              [x] barra vertical (com o Moonraker falso)
-US2 falhas:   [x] desligada (Biqu B1 na tomada: offline em ≤ 8 s, sem dados antigos, volta sozinha como erro)  [ ] Wi-Fi  [~] sem resposta (servidor travado)  [x] endereço inexistente
-              [x] shutdown real do MCU (Biqu B1: termistor do bico fora da faixa; ícone com selo e mensagem do Klipper legível no painel)  [x] FIRMWARE_RESTART real na Voron (~5 s: 503 "Klippy Disconnected" → 503 "Klippy Host not connected" → 200 `startup` → ready; o plugin mostra erro com mensagem legível e volta sozinho)  [ ] M112  [x] klipper parado (503 real na Biqu B1: "Klippy Host not connected", sem temperaturas)  [x] 401 real (Biqu B1 sem 192.168.0.0/16 em trusted_clients)  [x] curl ausente (binário inexistente)
-US3 painel:   [x] detalhes da Voron ociosa  [x] detalhes imprimindo (Voron real: arquivo, 0%, restante "—", mesa 105/118 °C)  [x] impressão real avançando (Voron: 16% com restante 36m, depois 27%)
-              [~] restante "—"  [x] fecha com Escape e hide  [x] abre com clique no ícone e fecha com clique fora (usuário)
-US4 seletor:  [x] mais relevante (Biqu em erro acima da Voron imprimindo; Biqu offline → Voron imprimindo passa a ser a destacada)  [x] troca pelo teclado (j/k + Enter)  [x] troca pelo mouse (usuário)  [x] ícone segue a escolha (decisão de 2026-09-29)
-              [x] seleção mantida ao reabrir  [x] nomes repetidos (testes)
-US5 cadastro: [x] vazio  [x] cadastro ao vivo  [x] remoção ao vivo
-Ciclo de vida: [x] clique  [x] Escape  [x] summon  [x] hide  [x] troca de painel  [x] desabilitar
-               [x] reabilitar (sem as configurações, comportamento do Omarchy)  [x] reiniciar shell  [x] remover (e reinstalar do GitHub: volta na mesma posição, sem as configurações)
-Desempenho:   [x] 5 impressoras (3 inexistentes): no máximo 3 curl simultâneos, painel abre em ~60 ms
+US1 ícone
+  [x] ociosa (Voron e Biqu)
+  [x] imprimindo: barra de progresso (Voron; 0% no aquecimento, 16%, 27%, 64%, 80%)
+  [x] pausada (Voron: preenchimento atenuado; pouco visível com progresso baixo, ver Melhorias)
+  [x] fim da impressão: `complete` → ociosa (Voron)
+  [x] cancelamento → ociosa (Voron: `paused` → `standby` direto, sem o estado `cancelled`)
+  [x] erro: cor de alerta + selo (Biqu; vermelho no Tokyo Night, cinza no Solitude)
+  [x] offline: ícone esmaecido (Biqu desligada; Wi-Fi do computador desligado)
+  [x] troca de tema (Catppuccin Latte, Tokyo Night): ícone, selo e painel acompanham
+  [s] barra vertical
+
+US2 falhas
+  [x] impressora desligada na tomada (Biqu): offline em ≤ 8 s, sem dados antigos, volta sozinha
+  [x] Wi-Fi do computador desligado: tudo offline e volta sozinho (usuário)
+  [x] endereço inexistente e endereço inválido
+  [x] shutdown do MCU (Biqu: termistor do bico fora da faixa): erro com a mensagem do Klipper
+      em parágrafos legíveis; depois do conserto, volta a ociosa sem selo
+  [x] Klipper parado (Biqu): 503 "Klippy Host not connected", sem temperaturas
+  [x] FIRMWARE_RESTART (Voron, ~5 s): 503 "Klippy Disconnected" → 503 "Klippy Host not
+      connected" → 200 `startup` → ready; erro legível por 1–2 ciclos e volta sozinho
+  [x] 401 (Biqu sem 192.168.0.0/16 em trusted_clients): "acesso não autorizado — libere…"
+  [x] curl ausente (binário inexistente): erro "curl não encontrado"
+  [s] M112 não executado: mesmo caminho do shutdown real do MCU acima (webhooks.state shutdown)
+
+US3 painel
+  [x] detalhes ociosa, imprimindo, pausada e erro (arquivo, %, restante, bico/mesa atual/alvo)
+  [x] restante "—" enquanto o tempo de impressão ainda é zero (Voron aquecendo)
+  [x] restante calculado (Voron: 36m a 16%, 9m a 64%, 4m a 80%)
+  [x] abre com clique no ícone; fecha com clique fora, Escape, novo clique e `hide`
+  [x] troca para outro painel (Wi-Fi) fecha o nosso
+
+US4 seletor
+  [x] mais relevante ao abrir (Biqu em erro acima da Voron imprimindo; Biqu offline → Voron)
+  [x] troca pelo teclado (j/k + Enter) e pelo mouse
+  [x] seleção mantida ao reabrir; ícone segue a escolha (decisão de 2026-09-29)
+  [s] nomes repetidos
+
+US5 cadastro
+  [x] vazio, cadastro ao vivo, remoção ao vivo
+
+Ciclo de vida
+  [x] clique · Escape · summon · hide · troca de painel · desabilitar · reabilitar ·
+      reiniciar o shell · remover e reinstalar do GitHub
+
+Desempenho
+  [x] 5 impressoras (3 inexistentes): no máximo 3 curl simultâneos, painel abre em ~60 ms
 ```
 
-## Pendências para concluir a fatia
+## Fixtures reais capturadas
 
-2. `FIRMWARE_RESTART` na Biqu → volta a ociosa.
-4. Desligar o Wi-Fi do computador → tudo offline e volta sozinho (fazer por último; derruba a sessão do assistente).
-9. Fixture real de `cancelled`: não obtida; o macro de cancelamento da Voron leva direto a
-   `standby`. Fica a sintética. Já reais: `standby`, `printing`, `paused`, `complete`, `shutdown`,
-   `klippy-disconnected`, `klippy-restarting`, `startup`, `unauthorized`.
+`standby` (Voron), `printing`, `paused`, `complete`, `klippy-restarting`, `startup` (Voron);
+`shutdown`, `klippy-disconnected`, `unauthorized`, `biqu-standby` (Biqu B1). Falhas de rede
+reais: `refused`, `dns`, `timeout`, `bad-url`. A de `cancelled` não existe nesta impressora
+(o macro de cancelamento leva direto a `standby`); fica a sintética.
 
-10. ~~Investigar configurações vazias depois de reconectar o monitor~~ **Diagnosticado (bug do
-    Omarchy 4.0.4)**: `Bar.applySettingsDelta` aplica mudanças de configuração só nos widgets em
-    execução. Widgets criados depois, quando um monitor é reconectado, recebem as configurações
-    da última reconstrução completa da barra (`ModuleSlot.moduleSettings =
-    entrySettings(entry)`). Reproduzido: com a Biqu renomeada ao vivo para "Biqu B1 (teste)",
-    depois de reconectar o monitor a instância recriada mostrou "Biqu B1", embora o `shell.json`
-    e o `listShellConfig` tivessem o nome novo. Contorno: `omarchy-restart-shell` depois de mudar
-    configurações. Não é corrigível no plugin. Visto de novo: a instância recriada também não
-    recebe mudanças feitas **depois** da recriação (o nome "(teste)" continuou no monitor externo
-    após restaurar "Biqu B1" no `shell.json`).
+## Bugs do Omarchy 4.0.4 encontrados
 
-Melhoria possível (não bloqueia): distinguir melhor "pausada" no ícone com progresso baixo
-(p.ex. um marcador de pausa), já apontado na análise (U1).
+1. `omarchy bar set --json` divide listas JSON no `quickshell ipc call` (lista de um item vira
+   objeto; dois itens: "Too many arguments"). Contorno no plugin: `printers` aceita lista, texto
+   JSON ou objeto único.
+2. Só o primeiro `omarchy bar set` num widget chega ao widget em execução (a entrada é alterada
+   no próprio lugar e o `inlineSettingsDelta` não vê diferença). Contorno: editar o `shell.json`.
+3. Hot reload não recarrega o código de um plugin de terceiros. Contorno: `omarchy-restart-shell`.
+4. Widgets recriados na reconexão de um monitor recebem as configurações da última montagem
+   completa da barra (`ModuleSlot.moduleSettings = entrySettings(entry)`) e não recebem as
+   mudanças feitas depois (`Bar.applySettingsDelta` só alcança os widgets antigos). Reproduzido
+   renomeando a Biqu ao vivo. Contorno: `omarchy-restart-shell`.
 
-Observações: o tema em uso tem `urgent` = `#565d60` (cinza), por isso o erro ganhou um selo além
-da cor.
+## Melhorias para próximas fatias (não bloqueiam)
+
+- Distinguir melhor "pausada" no ícone com progresso baixo (p.ex. um marcador de pausa), já
+  apontado na análise (U1).
+- Mostrar `display_status.message` do Klipper (p.ex. "Aquecendo a Camara") no painel.
+
+## Observações
+
+O tema Solitude define `urgent` = `#565d60` (cinza), por isso o erro ganhou um selo além da cor.

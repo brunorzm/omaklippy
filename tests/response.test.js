@@ -155,3 +155,9 @@ test("real Voron capture while paused → paused, remaining frozen but known", (
   assert.equal(M.computePercent("paused", r.progress), 2)
   assert.ok(M.estimateRemaining("paused", r.progress, r.printDuration) > 0)
 })
+
+test("real Biqu B1 capture after the thermistor fix → idle", () => {
+  const r = parse("biqu-standby")
+  assert.equal(r.klippyState, "ready")
+  assert.deepEqual(M.deriveState(r), { state: "idle", reason: "" })
+})

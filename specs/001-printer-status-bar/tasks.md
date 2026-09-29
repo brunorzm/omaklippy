@@ -111,7 +111,7 @@ observar o ícone ([quickstart.md §4 US1](./quickstart.md#4-cenários-por-hist�
 - [X] T022 [US1] Implementar `pickHighlighted` e `buildIconState` em `Model.js` para T021 passar
 - [X] T023 [US1] Em `BarWidget.qml`, adicionar `readonly property var iconState: Model.buildIconState(config.printers, statuses)` e trocar o `text` do `BarIconButton` por um `iconComponent` com o `OpticalGlyph` (`Model.PRINTER_GLYPH`, `fontFamily: button.fontFamily`) e, sob ele, dentro de `Style.bar.iconCanvas`, uma barra de progresso de dois `Rectangle`s (trilho `Util.alpha(root.bar.barForeground, …)`, preenchimento `root.bar.barForeground` com largura proporcional a `iconState.progress`, opacidade reduzida em `paused`; espessura e margens via `Style.space()`), visível só em printing/paused; `active` + `useActiveColor` com `activeColor: root.bar.urgent` em `error` (glifo e barra em urgent); `dimmed: iconState.mode === "offline"`; `tooltipText: iconState.tooltip`
 - [X] T024 [US1] Conferir o ícone em barra vertical (`omarchy bar position left`) e com dois temas diferentes (a barra de progresso acompanha as cores); voltar a posição original
-- [ ] T025 [US1] Rodar o gate e os cenários de US1 do quickstart numa impressora real
+- [X] T025 [US1] Rodar o gate e os cenários de US1 do quickstart numa impressora real
 
 **Checkpoint**: MVP. A barra mostra de relance se há impressão, o progresso aproximado, erro e
 offline.
@@ -136,7 +136,7 @@ e bloquear o IP ([quickstart.md §4 US2](./quickstart.md#4-cenários-por-histór
 - [X] T028 [US2] Completar `parseResponse`, `deriveState` e `applyReading` em `Model.js` para T027 passar (incluindo o `try/catch` em volta do `JSON.parse`)
 - [X] T029 [US2] Em `BarWidget.qml`, conferir que o descarte de respostas atrasadas ou fora de ordem (FR-012) passa só por `Model.acceptResult` (o `onExited` depois da guarda é ignorado porque `pending` já é `false`) e que impressoras com `invalidReason` não geram `Process` (`planDispatch` não as inclui); acrescentar a `tests/engine.test.js` o cenário "guarda dispara → offline; `onExited` tardio com o mesmo seq → ignorado"
 - [X] T030 [US2] Verificar empiricamente como o `Process` do Quickshell reporta um binário inexistente (rodar com `command: ["curl-nao-existe"]` e observar `onExited`/`running` no log); mapear esse caso para `Model.parseResponse("", -1)` em `BarWidget.qml` e registrar a observação num comentário curto
-- [ ] T031 [US2] Rodar o gate e os cenários de US2 do quickstart (desligada, Wi-Fi, endereço errado, endereço inválido, M112, klipper parado, 401)
+- [X] T031 [US2] Rodar o gate e os cenários de US2 do quickstart (desligada, Wi-Fi, endereço errado, endereço inválido, M112, klipper parado, 401)
 
 **Checkpoint**: nenhum dado velho aparece como atual; o ícone fica esmaecido em offline e na cor
 de alerta em erro.
@@ -215,12 +215,12 @@ sem reiniciar ([quickstart.md §4 US5](./quickstart.md#4-cenários-por-história
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T048 Capturar fixtures reais de uma impressora (Princípio VII) com o comando de [quickstart.md §2](./quickstart.md#2-conferir-a-impressora-fora-do-shell) para `printing`, `paused`, `standby`, `complete`, `cancelled`, `shutdown`, `startup`, `klippy-disconnected` e `unauthorized`, salvando em `tests/fixtures/<nome>.json` (sem o sufixo `.synthetic`), adicionar casos em `tests/response.test.js`/`tests/errors.test.js` que usam as reais e ajustar `Model.js` se alguma divergir das sintéticas
+- [X] T048 Capturar fixtures reais de uma impressora (Princípio VII) com o comando de [quickstart.md §2](./quickstart.md#2-conferir-a-impressora-fora-do-shell) para `printing`, `paused`, `standby`, `complete`, `cancelled`, `shutdown`, `startup`, `klippy-disconnected` e `unauthorized`, salvando em `tests/fixtures/<nome>.json` (sem o sufixo `.synthetic`), adicionar casos em `tests/response.test.js`/`tests/errors.test.js` que usam as reais e ajustar `Model.js` se alguma divergir das sintéticas
 - [X] T049 [P] Auditoria do Princípio VIII: `grep -nE '#[0-9a-fA-F]{3,8}|Qt\.rgba|Qt\.rgb|font\.family *: *"|pixelSize *: *[0-9]' BarWidget.qml Panel.qml` sem resultados, e corrigir o que aparecer
 - [X] T050 [P] Auditoria do Princípio I: `moduleName` igual ao id do manifest em `BarWidget.qml` e `Panel.qml`; `grep -rn "omarchy.clock" --include=*.qml .` vazio; `find . -type l -not -path './.git/*'` vazio
 - [X] T051 Verificar SC-007: cadastrar 5 impressoras (3 inexistentes), confirmar no máximo 5 `curl` simultâneos por instância, o painel abrindo sem atraso e o log limpo
 - [X] T052 Executar o checklist de ciclo de vida completo ([quickstart.md §5](./quickstart.md#5-checklist-de-ciclo-de-vida-princípio-vi)), incluindo desabilitar com o painel aberto, reabilitar, `omarchy-restart-shell` e remover (reinstalar em seguida)
-- [ ] T053 Executar o quickstart inteiro numa impressora real e registrar o resultado no bloco de [quickstart.md §6](./quickstart.md#6-registro-do-teste-em-hardware-princípio-vii), salvo em `specs/001-printer-status-bar/hardware-test.md` (Princípio VII)
+- [X] T053 Executar o quickstart inteiro numa impressora real e registrar o resultado no bloco de [quickstart.md §6](./quickstart.md#6-registro-do-teste-em-hardware-princípio-vii), salvo em `specs/001-printer-status-bar/hardware-test.md` (Princípio VII)
 
 ---
 
