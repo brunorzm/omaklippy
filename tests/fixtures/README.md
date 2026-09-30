@@ -13,6 +13,10 @@ Each fixture is the raw output of one Moonraker query, exactly as the plugin rec
 `*.synthetic.json` files were written by hand from the Moonraker docs. All others were captured
 from real printers (Voron and Biqu B1) or from real curl failures.
 
+`standby-stale-message.synthetic.json` is `standby.synthetic.json` still showing the last print's
+message ("Imprimindo"), as the Voron does after a print ends; `printing-message.synthetic.json` is
+`printing.synthetic.json` with a message padded with spaces. Both are for the slice 005 message.
+
 `standby-heating.synthetic.json` is `standby.synthetic.json` with the nozzle heating (target
 200 °C, at 134 °C) and no print: the "idle but heating" case of the slice 004 notifications.
 
@@ -49,3 +53,10 @@ automated tool.
 
 `action-ok.json` is a real capture: a pause `POST` to the Voron (Moonraker v0.11), taken by the
 printer's owner during the slice 002 hardware test.
+
+## Metadata fixtures
+
+`metadata-*` fixtures are the raw output of `GET /server/files/metadata?filename=…`, in the same
+`{ exitCode, stdout }` format, captured from the Voron (Moonraker v0.11) on 2026-09-30:
+`metadata-ok.json` (OrcaSlicer file, `estimated_time` 1343) and `metadata-missing.json` (a file
+that does not exist: HTTP 404 "Metadata not available"). This request only reads.

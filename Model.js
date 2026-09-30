@@ -292,6 +292,61 @@ function buildCurlArgs(url, timeoutSec) {
     "-H", "Accept: application/json", "-w", "\n%{http_code}", url]
 }
 
+// ---- Slicer estimate: GET /server/files/metadata once per print.
+
+function buildMetadataArgs(baseUrl, filename, timeoutSec) {
+  if (typeof baseUrl !== "string" || baseUrl === "" || typeof filename !== "string" || filename === "") return []
+  return buildCurlArgs(baseUrl + "/server/files/metadata?filename=" + encodeURIComponent(filename), timeoutSec)
+}
+
+// The slicer's total print time in seconds, or null when the file has no
+// metadata, the printer did not answer or the answer makes no sense.
+function parseMetadataResponse(stdout, exitCode) {
+  var t = readTransport(stdout, exitCode)
+  if (t.errorMessage || t.httpStatus < 200 || t.httpStatus >= 300) return null
+  var res = isObject(t.data) && isObject(t.data.result) ? t.data.result : null
+  var sec = res ? finiteOrNull(res.estimated_time) : null
+  return sec !== null && sec > 0 ? sec : null
+}
+
+// Returns { statuses, requests }: one metadata fetch for each printer with a
+// print whose file has no estimate yet (a failed fetch counts: no retry
+// within the same print).
+function planEstimate(statuses, printers, timeoutMs) {
+  var list = Array.isArray(printers) ? printers : []
+  var src = isObject(statuses) ? statuses : {}
+  var timeoutSec = Math.max(1, Math.ceil((finiteOrNull(timeoutMs) || DEFAULT_TIMEOUT_SEC * 1000) / 1000))
+  var next = null
+  var requests = []
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i]
+    if (!isObject(p) || p.invalidReason || !p.baseUrl) continue
+    var st = src[p.key]
+    if (!isObject(st) || !hasJob(st.state)) continue
+    var file = stringOr(st.filename, "")
+    if (file === "" || (isObject(st.estimate) && st.estimate.filename === file)) continue
+    var seq = (isObject(st.estimate) ? finiteOrNull(st.estimate.seq) || 0 : 0) + 1
+    if (!next) next = copy(src)
+    var updated = copy(st)
+    updated.estimate = { filename: file, seconds: null, pending: true, seq: seq }
+    next[p.key] = updated
+    requests.push({ key: p.key, seq: seq, filename: file, args: buildMetadataArgs(p.baseUrl, file, timeoutSec) })
+  }
+  return { statuses: next || statuses, requests: requests }
+}
+
+function acceptEstimate(statuses, key, seq, filename, seconds) {
+  if (!isObject(statuses) || !isObject(statuses[key])) return statuses
+  var e = statuses[key].estimate
+  if (!isObject(e) || e.pending !== true || e.seq !== seq || e.filename !== filename) return statuses
+  var next = copy(statuses)
+  var st = copy(statuses[key])
+  var sec = finiteOrNull(seconds)
+  st.estimate = { filename: e.filename, seconds: sec !== null && sec > 0 ? sec : null, pending: false, seq: e.seq }
+  next[key] = st
+  return next
+}
+
 function isAction(action) {
   return typeof action === "string" && ACTIONS.hasOwnProperty(action)
 }
@@ -317,6 +372,7 @@ function emptyReading() {
     progress: null,
     printDuration: null,
     filename: "",
+    displayMessage: "",
     nozzle: null,
     bed: null
   }
@@ -397,6 +453,7 @@ function parseResponse(stdout, exitCode) {
   r.printState = stringOr(ps.state, "")
   r.printMessage = stringOr(ps.message, "")
   r.filename = stringOr(ps.filename, "")
+  r.displayMessage = stringOr(ds.message, "").trim()
   r.printDuration = finiteOrNull(ps.print_duration)
   r.progress = finiteOrNull(sd.progress)
   if (r.progress === null) r.progress = finiteOrNull(ds.progress)
@@ -446,6 +503,24 @@ function estimateRemaining(state, progress, printDuration) {
   return Math.max(0, d / p - d)
 }
 
+// Remaining time from the slicer's estimate and the progress-based one: the
+// slicer alone at first, the progress more and more as the print advances.
+// Once the print outlasts the slicer, only the progress counts; nothing
+// usable → null ("—"), never zero.
+function blendRemaining(progressRemaining, slicerTotal, printDuration, progress) {
+  var P = finiteOrNull(progressRemaining)
+  var E = finiteOrNull(slicerTotal)
+  var R = P
+  if (E !== null && E > 0) {
+    var S = E - Math.max(0, finiteOrNull(printDuration) || 0)
+    if (S > 0) {
+      var w = Math.min(1, Math.max(0, finiteOrNull(progress) || 0))
+      R = P === null ? S : (1 - w) * S + w * P
+    }
+  }
+  return R !== null && R > 0 ? R : null
+}
+
 function stateLabel(state) {
   return TEXT.states.hasOwnProperty(state) ? TEXT.states[state] : TEXT.states.offline
 }
@@ -469,7 +544,11 @@ function initialStatus(key) {
     followUp: false,
     printState: "",
     requestedAt: null,
-    klippyState: ""
+    klippyState: "",
+    message: "",
+    progress: null,
+    printDuration: null,
+    estimate: null
   }
 }
 
@@ -485,8 +564,12 @@ function applyReading(prev, reading, now) {
     base.filename = ""
     base.nozzle = null
     base.bed = null
+    base.estimate = null
     base.printState = ""
     base.klippyState = ""
+    base.message = ""
+    base.progress = null
+    base.printDuration = null
     base.offlineSince = base.state === "offline" && isObject(prev) && prev.state === "offline" && prev.offlineSince !== null && prev.offlineSince !== undefined
       ? prev.offlineSince : now
     return base
@@ -498,6 +581,12 @@ function applyReading(prev, reading, now) {
   base.bed = r.bed || null
   base.printState = stringOr(r.printState, "")
   base.klippyState = stringOr(r.klippyState, "")
+  base.message = stringOr(r.displayMessage, "")
+  base.progress = hasJob(d.state) ? finiteOrNull(r.progress) : null
+  base.printDuration = finiteOrNull(r.printDuration)
+  // The slicer's estimate belongs to this print: gone once it ends or the
+  // file changes, so the next print fetches it again.
+  if (!hasJob(d.state) || !isObject(base.estimate) || base.estimate.filename !== base.filename) base.estimate = null
   base.offlineSince = null
   if (r.httpStatus > 0) base.lastSeenAt = now
   return base
@@ -1019,6 +1108,8 @@ function resolveSelection(selectedKey, printers, statusesByKey) {
 }
 
 function detailFor(printer, status, now) {
+  if (!isObject(printer)) printer = { key: "", displayName: "" }
+  if (!isObject(status)) status = initialStatus(printer.key)
   var job = hasJob(status.state)
   var meta = stateLabel(status.state)
   if (job && status.percent !== null && status.percent !== undefined) meta += " · " + status.percent + "%"
@@ -1037,7 +1128,11 @@ function detailFor(printer, status, now) {
     reason: tidyMessage(status.reason),
     percent: job ? status.percent : null,
     filename: job ? (status.filename || "") : "",
-    remainingText: job ? formatDuration(status.remainingSec) : "",
+    // A finished print leaves its last message behind (the Voron keeps
+    // "Imprimindo"), so it only shows while there is a print.
+    messageText: job ? stringOr(status.message, "") : "",
+    remainingText: job ? formatDuration(blendRemaining(status.remainingSec,
+      isObject(status.estimate) ? status.estimate.seconds : null, status.printDuration, status.progress)) : "",
     nozzleText: formatTemp(status.nozzle),
     bedText: formatTemp(status.bed),
     showTemps: status.state !== "offline" && (!!status.nozzle || !!status.bed),
@@ -1224,6 +1319,12 @@ if (typeof module !== "undefined") {
     formatElapsed: formatElapsed,
     resolveSelection: resolveSelection,
     buildPanelModel: buildPanelModel,
+    detailFor: detailFor,
+    buildMetadataArgs: buildMetadataArgs,
+    parseMetadataResponse: parseMetadataResponse,
+    planEstimate: planEstimate,
+    acceptEstimate: acceptEstimate,
+    blendRemaining: blendRemaining,
     setupCommand: setupCommand,
     tidyMessage: tidyMessage,
     availableActions: availableActions,

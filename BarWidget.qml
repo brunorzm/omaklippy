@@ -59,6 +59,17 @@ BarWidget {
       var r = plan.requests[i]
       requestComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: config.timeoutMs + 1000 })
     }
+    // The slicer's estimate, once per print (Model.planEstimate).
+    var est = Model.planEstimate(statuses, config.printers, config.timeoutMs)
+    statuses = est.statuses
+    for (var j = 0; j < est.requests.length; j++) {
+      var e = est.requests[j]
+      estimateComponent.createObject(requestHolder, { key: e.key, seq: e.seq, filename: e.filename, args: e.args, guardMs: config.timeoutMs + 1000 })
+    }
+  }
+
+  function acceptEstimate(key, seq, filename, seconds) {
+    statuses = Model.acceptEstimate(statuses, key, seq, filename, seconds)
   }
 
   function accept(key, seq, reading) {
@@ -358,6 +369,78 @@ BarWidget {
   }
 
   Component {
+    id: estimateComponent
+
+    // One metadata GET for the slicer's estimate. Same lifecycle as a status
+    // query: exactly one result, from curl or from the guard.
+    Item {
+      id: fetch
+      required property string key
+      required property int seq
+      required property string filename
+      required property var args
+      required property int guardMs
+
+      property bool finished: false
+      property bool launched: false
+      property bool exited: false
+      property bool drained: false
+      property int exitCode: -1
+      property string output: ""
+
+      function complete(seconds) {
+        if (finished) return
+        finished = true
+        fetchGuard.stop()
+        fetchProc.running = false
+        root.acceptEstimate(key, seq, filename, seconds)
+        fetch.destroy()
+      }
+
+      function stop() {
+        finished = true
+        fetchGuard.stop()
+        fetchProc.running = false
+        fetch.destroy()
+      }
+
+      function tryComplete() {
+        if (exited && drained) complete(Model.parseMetadataResponse(output, exitCode))
+      }
+
+      Process {
+        id: fetchProc
+        command: fetch.args
+        running: true
+        onStarted: fetch.launched = true
+        onRunningChanged: {
+          if (!running && !fetch.launched && !fetch.finished) fetch.complete(null)
+        }
+        stdout: StdioCollector {
+          waitForEnd: true
+          onStreamFinished: {
+            fetch.output = String(text || "")
+            fetch.drained = true
+            fetch.tryComplete()
+          }
+        }
+        onExited: function(exitCode) {
+          fetch.exitCode = exitCode
+          fetch.exited = true
+          fetch.tryComplete()
+        }
+      }
+
+      Timer {
+        id: fetchGuard
+        interval: fetch.guardMs
+        running: true
+        onTriggered: fetch.complete(null)
+      }
+    }
+  }
+
+  Component {
     id: commandComponent
 
     // One printer action (POST). Same lifecycle as a query: exactly one
@@ -587,6 +670,37 @@ BarWidget {
           color: button.markColor
           border.width: Math.max(1, Style.space(1))
           border.color: Color.bar.background
+        }
+
+        // Pause marker, in the error badge's corner (the states never meet):
+        // with little progress the dimmed rail alone reads like printing.
+        // Like the badge, it sits on a plate of the bar's background so the
+        // two bars stay apart from the glyph.
+        Rectangle {
+          id: pauseMark
+          visible: root.iconState.mode === "paused"
+          anchors.right: parent.right
+          anchors.top: parent.top
+          readonly property real pad: Math.max(1, Style.space(1))
+          readonly property real barWidth: Math.max(1, Style.space(1.5))
+          width: barWidth * 3 + pad * 2
+          height: Math.max(3, Style.space(5)) + pad * 2
+          color: Color.bar.background
+
+          Row {
+            anchors.centerIn: parent
+            spacing: pauseMark.barWidth
+
+            Repeater {
+              model: 2
+
+              Rectangle {
+                width: pauseMark.barWidth
+                height: pauseMark.height - pauseMark.pad * 2
+                color: button.markColor
+              }
+            }
+          }
         }
 
         Item {

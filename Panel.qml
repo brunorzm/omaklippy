@@ -360,6 +360,19 @@ Panel {
                 }
               }
 
+              // What the printer says it is doing ("Aquecendo a Camara"), in its own
+              // words; only while there is a print (Model.detailFor).
+              Text {
+                visible: (root.selected.messageText || "") !== ""
+                width: parent.width
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                text: root.selected.messageText || ""
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
               InfoRow {
                 label: Model.TEXT.panel.file
                 value: root.selected.filename || "—"

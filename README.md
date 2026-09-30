@@ -4,10 +4,15 @@ An [Omarchy](https://omarchy.org) Quattro plugin (`io.github.brunorzm.omaklippy`
 status of your Klipper 3D printers in the bar, by polling the Moonraker API on your local network.
 
 - **In the bar**: just the printer icon. While printing, a thin progress bar sits under the icon
-  (dimmed while paused). On error the icon gets a badge in the theme's alert color; when the
-  printer is offline the icon is faded. Hover shows one line: `Voron — printing 42%`.
-- **In the panel** (click the icon): state, progress, file, time remaining, nozzle and bed
-  temperatures, and how long ago the last answer came in. With more than one printer, a "Printer"
+  (dimmed while paused, with a small pause mark in the corner). On error the icon gets a badge in
+  the theme's alert color; when the printer is offline the icon is faded. Hover shows one line: `Voron — printing 42%`.
+- **In the panel** (click the icon): state, progress, what the printer says it is doing (its
+  display message, e.g. `Heating chamber`, only while printing or paused), file, time remaining,
+  nozzle and bed temperatures, and how long ago the last answer came in.
+- **Time remaining** starts from the slicer's estimate saved in the file, so it shows from the
+  first minute (even during a chamber heat-soak), and leans more and more on the actual progress
+  as the print advances. Once a print outlasts the slicer's estimate, only the progress counts.
+  Files without a slicer estimate work as before (`—` until the print has advanced a little). With more than one printer, a "Printer"
   dropdown lets you pick which one to show (mouse, or `j`, Enter, then `j`/`k` and Enter).
 - The icon stands for the printer you picked in the panel during this session. Without a pick it
   shows the most relevant one: error > printing > paused > offline > idle (ties: registration
@@ -123,7 +128,8 @@ omarchy bar set io.github.brunorzm.omaklippy timeoutSec 5 --json
 
 ### Moonraker
 
-The plugin calls `GET /printer/objects/query` for status and, when you use the panel's buttons,
+The plugin calls `GET /printer/objects/query` for status, `GET /server/files/metadata` once per
+print for the slicer's estimate and, when you use the panel's buttons,
 `POST /printer/print/pause`, `/printer/print/resume`, `/printer/print/cancel` and
 `/printer/emergency_stop`, all without authentication. Your computer has to be allowed in
 `moonraker.conf` (for status and for commands):

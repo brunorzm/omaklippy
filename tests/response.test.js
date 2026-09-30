@@ -105,6 +105,10 @@ test("initialStatus is offline, waiting for the first answer", () => {
     printState: "", // slice 004: raw print_stats.state, for notifications
     requestedAt: null,
     klippyState: "",
+    message: "", // slice 005: what the printer shows, progress and printing time for the estimate
+    progress: null,
+    printDuration: null,
+    estimate: null,
   })
 })
 
@@ -164,4 +168,24 @@ test("real Biqu B1 capture after the thermistor fix → idle", () => {
   const r = parse("biqu-standby")
   assert.equal(r.klippyState, "ready")
   assert.deepEqual(M.deriveState(r), { state: "idle", reason: "" })
+})
+
+// ---- Slice 005: the printer's message and the raw numbers behind the remaining time
+
+test("parseResponse reads the printer's display message, trimmed", () => {
+  assert.equal(parse("printing").displayMessage, "Aquecendo a Camara")
+  assert.equal(parse("printing-message.synthetic").displayMessage, "Nivelando a mesa")
+  assert.equal(parse("printing.synthetic").displayMessage, "")
+  assert.equal(parse("refused").displayMessage, "")
+})
+
+test("applyReading keeps the message, raw progress and printing time", () => {
+  const base = M.initialStatus("k#0")
+  const printing = M.applyReading(base, parse("printing.synthetic"), 1000)
+  assert.deepEqual([printing.message, printing.progress, printing.printDuration], ["", 0.427, 1200.1])
+  const soak = M.applyReading(base, parse("printing"), 1000)
+  assert.deepEqual([soak.message, soak.printDuration], ["Aquecendo a Camara", 0])
+  assert.equal(M.applyReading(base, parse("standby.synthetic"), 1000).progress, null, "no print, no progress")
+  const off = M.applyReading(soak, parse("refused"), 2000)
+  assert.deepEqual([off.message, off.progress, off.printDuration], ["", null, null])
 })
