@@ -62,8 +62,8 @@ Decisões técnicas da fatia 007. A spec não tem `NEEDS CLARIFICATION`.
 ## R4. Sequência do reinício vista pelo painel (US1.3, SC-002)
 
 - **Decision**: nada novo no motor. Depois da resposta, `acceptCommand` já pede a consulta
-  imediata (002). Sequência esperada no Moonraker: `shutdown` (200) → POST `ok` → 503 "Klippy
-  Disconnected" → `startup` (200) → `ready` (200). O painel mostra "error" com "Klippy
+  imediata (002). Sequência esperada no Moonraker: `shutdown` (200) → POST `ok` → 503 ("Klippy
+  Disconnected", ou "Klippy Host not connected" como na Voron no teste em hardware) → `startup` (200) → `ready` (200). O painel mostra "error" com "Klippy
   Disconnected", depois "error" com a mensagem de inicialização, depois "idle".
 - **Rationale**: o Moonraker só responde ao POST quando o Klippy já desconectou (R1), então a
   consulta imediata já pega o 503 e o botão não reaparece entre o envio e o reinício.

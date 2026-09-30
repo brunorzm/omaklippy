@@ -32,6 +32,8 @@ Os botões ficam abaixo das temperaturas e acima da linha "updated … ago", sep
 
 > **Fatia 003**: esta tabela foi substituída pela do [display.md da 003](../../003-open-web-ui/contracts/display.md#posição-no-painel-fr-003) (FR-013 da 003): o botão Open web UI aparece em todos os estados, inclusive erro e offline, sempre que a impressora tem endereço de interface web.
 
+> **Fatia 007**: em erro com o Klipper em `shutdown`/`error`, a linha primary mostra "Restart firmware" ([display.md da 007](../../007-firmware-restart/contracts/display.md#posição-no-painel-fr-009)).
+
 ## Botões
 
 `Button` (`qs.Ui`) com `bordered: true`, `iconText` = glifo da ação, `text` = rótulo,

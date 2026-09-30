@@ -24,6 +24,8 @@ novos indicados aqui. Tudo vive só em memória, dentro do `BarWidget` de cada i
 | `error`, `offline` | nenhuma |
 | sem impressoras | nenhuma (painel vazio) |
 
+> **Fatia 007**: com `error` e o Klipper em `shutdown` ou `error`, a ação `firmwareRestart` aparece (tabela em [data-model.md da 007](../007-firmware-restart/data-model.md#disponibilidade-actionsforstatus)); `availableActions(state)` não mudou, a regra nova está em `actionsFor(status)`.
+
 `idle` só existe com `webhooks.state === "ready"`, e `printing`/`paused` também, então
 "firmware pronto" (FR-001) é consequência do estado.
 

@@ -33,6 +33,12 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
   - **Emergency stop** whenever the printer is ready (printing, paused or idle), in its own row,
     filled with the theme's alert color, after a confirmation. It stays available while a slow
     pause/resume/cancel macro is still running.
+  - **Restart firmware** when Klipper is shut down (emergency stop, MCU fault) or stopped on a
+    config error, after a confirmation. The panel then follows the restart ("Klippy
+    Disconnected", "Printer is not ready…", then idle) on its own; if the fault is still there,
+    the printer goes back to "error" and the button comes back. It does not show while Klipper
+    is starting, when the Klipper service is disconnected from Moonraker (that needs the service
+    restarted on the printer's computer) or when only the print failed.
   - Confirmations open with **Back** selected, so Enter alone never confirms; use ←/→ (or Tab)
     and Enter, or click. Escape or a click outside the dialog gives up.
   - While a command runs its button spins and nothing else is sent to that printer (except the
@@ -41,7 +47,7 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
     printer switch.
   - Commands wait up to 60 s for Moonraker (macros may park or reheat) and are never retried on
     their own. After an emergency stop Klipper stays in "error" until you restart the firmware
-    (from Mainsail/Fluidd).
+    (**Restart firmware** in the panel, or from Mainsail/Fluidd).
   - Keyboard: `j`/`k` walk the dropdown and the buttons, Enter or Space presses.
 - **Open web UI** (last row of the panel, in any state, even error or offline): opens the
   selected printer's Mainsail/Fluidd in your default browser and closes the panel. Nothing is
@@ -139,8 +145,8 @@ omarchy bar set io.github.brunorzm.omaklippy timeoutSec 5 --json
 
 The plugin calls `GET /printer/objects/query` for status, `GET /server/files/metadata` once per
 print for the slicer's estimate and, when you use the panel's buttons,
-`POST /printer/print/pause`, `/printer/print/resume`, `/printer/print/cancel` and
-`/printer/emergency_stop`, all without authentication. Your computer has to be allowed in
+`POST /printer/print/pause`, `/printer/print/resume`, `/printer/print/cancel`,
+`/printer/emergency_stop` and `/printer/firmware_restart`, all without authentication. Your computer has to be allowed in
 `moonraker.conf` (for status and for commands):
 
 ```ini
@@ -169,7 +175,7 @@ No other external binary is ever run.
 - Creates no files outside its own folder. Settings live on the widget's entry in
   `~/.config/omarchy/shell.json`, written by the shell itself.
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
-  press one of the panel's buttons (Cancel and Emergency stop only after you confirm).
+  press one of the panel's buttons (Cancel, Emergency stop and Restart firmware only after you confirm).
 - Opens your default browser only when you press **Open web UI**.
 - Shows desktop notifications about your prints (each kind can be turned off).
 

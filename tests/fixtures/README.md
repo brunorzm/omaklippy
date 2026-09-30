@@ -25,6 +25,10 @@ Voron fixtures have `info` empty.
 `standby-heating.synthetic.json` is `standby.synthetic.json` with the nozzle heating (target
 200 °C, at 134 °C) and no print: the "idle but heating" case of the slice 004 notifications.
 
+`klippy-error.synthetic.json` is `shutdown.synthetic.json` with `webhooks.state` `"error"` and a
+config error message: Klipper started but refused its config. Like `shutdown`, it is a state the
+slice 007 "Restart firmware" button offers to recover from.
+
 ## Capture from a real printer
 
 ```bash

@@ -43,14 +43,16 @@ var TEXT = {
     days: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   },
-  actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop", openWebUi: "Open web UI" },
+  actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop", openWebUi: "Open web UI", firmwareRestart: "Restart firmware" },
   confirm: {
     back: "Back",
     cancelPrint: "Cancel print",
     stop: "Stop",
     cancelMessage: "Cancel the print \"%1\" on %2?",
     cancelMessageNoFile: "Cancel the current print on %1?",
-    emergencyMessage: "Emergency stop %1? Klipper will shut down until a firmware restart."
+    emergencyMessage: "Emergency stop %1? Klipper will shut down until a firmware restart.",
+    restart: "Restart",
+    restartMessage: "Restart the firmware on %1? Klipper and the printer's boards will restart."
   },
   actionFailed: "%1 failed: %2",
   left: "%1 left",
@@ -96,7 +98,8 @@ var ACTIONS = {
   pause: { path: "/printer/print/pause", confirm: false, slot: "busy" },
   resume: { path: "/printer/print/resume", confirm: false, slot: "busy" },
   cancel: { path: "/printer/print/cancel", confirm: true, slot: "busy" },
-  emergencyStop: { path: "/printer/emergency_stop", confirm: true, slot: "estop" }
+  emergencyStop: { path: "/printer/emergency_stop", confirm: true, slot: "estop" },
+  firmwareRestart: { path: "/printer/firmware_restart", confirm: true, slot: "busy" }
 }
 
 // Nerd Font glyphs from the bar's icon font.
@@ -106,7 +109,8 @@ var ACTION_GLYPHS = {
   cancel: "\u{f04db}",         // nf-md-stop
   emergencyStop: "\u{f0028}",  // nf-md-alert_octagon
   busy: "\u{f0772}",           // nf-md-loading
-  openWebUi: "\u{f03cc}"       // nf-md-open_in_new
+  openWebUi: "\u{f03cc}",      // nf-md-open_in_new
+  firmwareRestart: "\u{f0709}" // nf-md-restart
 }
 
 // Macros behind pause/resume/cancel can park, wait for moves and reheat, so
@@ -738,6 +742,24 @@ function availableActions(state) {
   return typeof state === "string" && ACTIONS_BY_STATE.hasOwnProperty(state) ? ACTIONS_BY_STATE[state].slice() : []
 }
 
+// A firmware restart only helps when Klipper itself is down (emergency stop,
+// MCU fault) or refused its config. Not while it is starting, not when the
+// Klippy service is disconnected from Moonraker (503, klippyState empty) and
+// not for a failed print with Klipper ready.
+function canRestartFirmware(status) {
+  if (!isObject(status) || status.state !== "error") return false
+  return status.klippyState === "shutdown" || status.klippyState === "error"
+}
+
+// The actions a printer offers now: the per-state table plus the firmware
+// restart, which depends on Klipper's own state as well.
+function actionsFor(status) {
+  if (!isObject(status)) return []
+  var ids = availableActions(status.state)
+  if (canRestartFirmware(status)) ids.push("firmwareRestart")
+  return ids
+}
+
 function emptyCommands() {
   return { busy: null, estop: null, web: null, failure: null, seq: 0 }
 }
@@ -753,8 +775,7 @@ function planCommand(commands, printer, status, action, timeoutMs, now) {
   var refused = { commands: commands, request: null }
   if (!isObject(printer) || typeof printer.key !== "string" || printer.invalidReason || !printer.baseUrl) return refused
   if (!isAction(action)) return refused
-  var state = isObject(status) ? status.state : ""
-  if (availableActions(state).indexOf(action) < 0) return refused
+  if (actionsFor(status).indexOf(action) < 0) return refused
   var cur = commandsFor(commands, printer.key)
   var slot = ACTIONS[action].slot
   if (cur.estop) return refused
@@ -1247,7 +1268,7 @@ function buildActionsModel(printer, status, printerCommands) {
   var pc = isObject(printerCommands) ? printerCommands : emptyCommands()
   var wrapped = {}
   wrapped[printer.key] = pc
-  var ids = availableActions(status.state)
+  var ids = actionsFor(status)
   for (var i = 0; i < ids.length; i++) {
     var id = ids[i]
     var running = (isObject(pc.busy) && pc.busy.action === id) || (isObject(pc.estop) && pc.estop.action === id)
@@ -1296,12 +1317,14 @@ function confirmMessage(action, displayName, filename) {
   if (action === "cancel")
     return file !== "" ? fill(TEXT.confirm.cancelMessage, file, name) : fill(TEXT.confirm.cancelMessageNoFile, name)
   if (action === "emergencyStop") return fill(TEXT.confirm.emergencyMessage, name)
+  if (action === "firmwareRestart") return fill(TEXT.confirm.restartMessage, name)
   return ""
 }
 
 function confirmLabel(action) {
   if (action === "cancel") return TEXT.confirm.cancelPrint
   if (action === "emergencyStop") return TEXT.confirm.stop
+  if (action === "firmwareRestart") return TEXT.confirm.restart
   return ""
 }
 
@@ -1428,6 +1451,8 @@ if (typeof module !== "undefined") {
     setupCommand: setupCommand,
     tidyMessage: tidyMessage,
     availableActions: availableActions,
+    canRestartFirmware: canRestartFirmware,
+    actionsFor: actionsFor,
     buildActionArgs: buildActionArgs,
     parseActionResponse: parseActionResponse,
     emptyCommands: emptyCommands,

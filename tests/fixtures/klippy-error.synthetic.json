@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\": {\"eventtime\": 1.0, \"status\": {\"webhooks\": {\"state\": \"error\", \"state_message\": \"Option 'rotation_distance' in section 'extruder' must be specified\\n\\nOnce the underlying issue is corrected, use the \\\"RESTART\\\" command to reload the config and restart the host software.\\nPrinter is halted\\n\"}, \"print_stats\": {\"state\": \"standby\", \"message\": \"\"}, \"virtual_sdcard\": {\"progress\": 0.3}, \"extruder\": {\"temperature\": 30.0, \"target\": 0.0}, \"heater_bed\": {\"temperature\": 25.0, \"target\": 0.0}}}}\n200"
+}
