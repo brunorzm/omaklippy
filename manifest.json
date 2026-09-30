@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.brunorzm.omaklippy",
   "name": "OmaKlippy",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Bruno",
   "license": "MIT",
   "description": "3D printer status and control for Klipper/Moonraker",
@@ -13,10 +13,14 @@
     "category": "Devices",
     "allowMultiple": true,
     "defaultSection": "right",
-    "defaults": { "printers": [], "refreshIntervalSec": 5, "timeoutSec": 3 },
+    "defaults": { "printers": [], "refreshIntervalSec": 5, "timeoutSec": 3, "notifyComplete": "On", "notifyFailed": "On", "notifyPaused": "On", "notifyLostContact": "On" },
     "schema": [
       { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (s)", "min": 2, "max": 3600, "step": 1, "defaultValue": 5 },
-      { "key": "timeoutSec", "type": "integer", "label": "Timeout (s)", "min": 1, "max": 30, "step": 1, "defaultValue": 3 }
+      { "key": "timeoutSec", "type": "integer", "label": "Timeout (s)", "min": 1, "max": 30, "step": 1, "defaultValue": 3 },
+      { "key": "notifyComplete", "type": "enum", "label": "Notify when a print completes", "options": ["On", "Off"], "defaultValue": "On" },
+      { "key": "notifyFailed", "type": "enum", "label": "Notify when a print fails", "options": ["On", "Off"], "defaultValue": "On" },
+      { "key": "notifyPaused", "type": "enum", "label": "Notify when a print pauses outside the panel", "options": ["On", "Off"], "defaultValue": "On" },
+      { "key": "notifyLostContact", "type": "enum", "label": "Notify when a printing printer stops answering", "options": ["On", "Off"], "defaultValue": "On" }
     ]
   }
 }

@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
+import "Shared.js" as Shared
 
 // 3D printer status for the bar: one icon, details in a panel on click.
 //
@@ -24,10 +25,17 @@ BarWidget {
   // { [printerKey]: PrinterCommands }: running pause/resume/cancel and
   // emergency-stop commands plus the last failure, replaced like statuses.
   property var commands: ({})
+  // { [printerKey]: Watch }: this instance's view of each printer for the
+  // notifications (Model.observe). Every instance keeps its own, so another
+  // one can take over sending when this bar goes away.
+  property var watches: ({})
+  // This instance in Shared.state.registry; the first live one sends.
+  property int instanceId: 0
 
   function syncConfig() {
     statuses = Model.reconcileStatuses(statuses, config.printers)
     commands = Model.reconcileCommands(commands, config.printers)
+    watches = Model.reconcileWatches(watches, config.printers)
     // A removed printer drops the manual choice for good, so it does not
     // come back if an entry with the same key is added later.
     if (selectedKey !== "" && Model.resolveSelection(selectedKey, config.printers, statuses) !== selectedKey)
@@ -45,7 +53,7 @@ BarWidget {
   // onlyKey "" asks every printer; a key asks just that one (after a
   // printer command). Printers with a query in flight are skipped.
   function dispatch(onlyKey) {
-    var plan = Model.planDispatch(statuses, config.printers, config.timeoutMs, onlyKey)
+    var plan = Model.planDispatch(statuses, config.printers, config.timeoutMs, onlyKey, Date.now())
     statuses = plan.statuses
     for (var i = 0; i < plan.requests.length; i++) {
       var r = plan.requests[i]
@@ -54,9 +62,66 @@ BarWidget {
   }
 
   function accept(key, seq, reading) {
+    var before = statuses
     statuses = Model.acceptResult(statuses, key, seq, reading, Date.now())
+    if (statuses !== before) observe(key)
     // This answer may predate a command that finished meanwhile.
     if (statuses[key] && statuses[key].followUp === true) dispatch(key)
+  }
+
+  // ---- Notifications
+
+  function observe(key) {
+    var prot = Shared.state.protections
+    var r = Model.observe(watches[key], statuses[key], Model.isProtected(prot, key, instanceId))
+    Shared.state.protections = Model.releaseProtection(prot, key, statuses[key].requestedAt, instanceId, Shared.state.registry)
+    var next = Object.assign({}, watches)
+    next[key] = r.watch
+    watches = next
+    if (!Model.isLeader(Shared.state.registry, instanceId)) return
+    var events = Model.filterEvents(r.events, config.notify)
+    for (var i = 0; i < events.length; i++) sendNotification(key, events[i])
+  }
+
+  function displayNameOf(key) {
+    for (var i = 0; i < config.printers.length; i++)
+      if (config.printers[i].key === key) return config.printers[i].displayName
+    return ""
+  }
+
+  function sendNotification(key, event) {
+    var n = Model.buildNotification(event, displayNameOf(key))
+    if (n) notifyComponent.createObject(requestHolder, { args: n.args, guardMs: Model.NOTIFY_TIMEOUT_SEC * 1000 })
+  }
+
+  function acceptNotify(result) {
+    Shared.state.notify = { available: result.ok, message: result.message }
+    refreshNotifyWarning()
+  }
+
+  // Shared.js is not reactive: the panel reads a copy, refreshed when it
+  // opens, every 15 s while open, and after each send.
+  property string notifyWarningText: ""
+  function refreshNotifyWarning() {
+    notifyWarningText = Model.notifyWarning(Shared.state.notify)
+  }
+
+  // A missing notify-send shows up in the panel before the first event.
+  function probeNotify() {
+    var n = config.notify
+    if (!Model.isLeader(Shared.state.registry, instanceId)) return
+    if (!(n.complete || n.failed || n.paused || n.lostContact)) return
+    notifyComponent.createObject(requestHolder, { args: ["notify-send", "--version"], guardMs: Model.NOTIFY_TIMEOUT_SEC * 1000 })
+  }
+
+  function registerSelf() {
+    var r = Model.registerInstance(Shared.state.registry)
+    Shared.state.registry = r.registry
+    instanceId = r.id
+  }
+
+  function unregisterSelf() {
+    Shared.state.registry = Model.unregisterInstance(Shared.state.registry, instanceId)
   }
 
   // Sends one printer action. key is the printer the panel showed when the
@@ -68,13 +133,17 @@ BarWidget {
     var plan = Model.planCommand(commands, printer, statuses[key], action, config.timeoutMs, Date.now())
     commands = plan.commands
     var r = plan.request
-    if (r && r.args.length > 0)
+    if (r && r.args.length > 0) {
+      // Its effect must not come back as a notification, whichever bar reads it.
+      Shared.state.protections = Model.protectStart(Shared.state.protections, r.key)
       commandComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: r.guardMs })
+    }
   }
 
   // Success or failure, the printer is asked again right away so the panel
   // shows what the command did without waiting for the next cycle.
   function acceptCommand(key, seq, result) {
+    Shared.state.protections = Model.protectFinish(Shared.state.protections, key, Date.now())
     commands = Model.acceptCommandResult(commands, key, seq, result)
     statuses = Model.requestFollowUp(statuses, key)
     dispatch(key)
@@ -105,7 +174,9 @@ BarWidget {
   function stopRequests(onlyMissing) {
     var list = requestHolder.children
     for (var i = list.length - 1; i >= 0; i--) {
-      if (!onlyMissing || !(list[i].key in statuses)) list[i].stop()
+      // Notifications (key "") are not tied to a printer: a config change
+      // must not cut one short.
+      if (!onlyMissing || (list[i].key !== "" && !(list[i].key in statuses))) list[i].stop()
     }
   }
 
@@ -113,7 +184,7 @@ BarWidget {
   //      Bar.findPanelWidget requires open/close/opened on the bar-widget root.
   property string selectedKey: ""
   property real now: Date.now()
-  readonly property var panelModel: Model.buildPanelModel(config.printers, statuses, selectedKey, now, commands)
+  readonly property var panelModel: Model.buildPanelModel(config.printers, statuses, selectedKey, now, commands, notifyWarningText)
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   // Forwarded so this widget can stand in for the panel as the bar's popout
   // identity: Bar.requestPopout prefers closeForPopoutSwitch over close, and
@@ -144,6 +215,7 @@ BarWidget {
 
   function panelOpened() {
     now = Date.now()
+    refreshNotifyWarning()
   }
 
   function injectPanel() {
@@ -162,8 +234,15 @@ BarWidget {
   onSettingsChanged: injectPanel()
   onStatusesChanged: if (opened) now = Date.now()
   onConfigChanged: syncConfig()
-  Component.onCompleted: syncConfig()
-  Component.onDestruction: stopRequests(false)
+  Component.onCompleted: {
+    registerSelf()
+    syncConfig()
+    probeNotify()
+  }
+  Component.onDestruction: {
+    unregisterSelf()
+    stopRequests(false)
+  }
 
   Timer {
     interval: root.config.intervalMs
@@ -178,7 +257,10 @@ BarWidget {
     interval: 15000
     repeat: true
     running: root.opened
-    onTriggered: root.now = Date.now()
+    onTriggered: {
+      root.now = Date.now()
+      root.refreshNotifyWarning()
+    }
   }
 
   Loader {
@@ -303,10 +385,13 @@ BarWidget {
         job.destroy()
       }
 
+      // Cut short (config change, widget going away): no result comes, but
+      // the protection it opened must still end.
       function stop() {
         finished = true
         commandGuard.stop()
         commandProc.running = false
+        Shared.state.protections = Model.protectFinish(Shared.state.protections, key, Date.now())
         job.destroy()
       }
 
@@ -398,6 +483,58 @@ BarWidget {
         interval: launch.guardMs
         running: true
         onTriggered: launch.complete(Model.parseWebLaunchResult(-2, true))
+      }
+    }
+  }
+
+  Component {
+    id: notifyComponent
+
+    // One notify-send run; exactly one result reaches acceptNotify.
+    Item {
+      id: note
+      readonly property string key: ""
+      required property var args
+      required property int guardMs
+
+      property bool finished: false
+      property bool launched: false
+
+      function complete(result) {
+        if (finished) return
+        finished = true
+        noteGuard.stop()
+        noteProc.running = false
+        root.acceptNotify(result)
+        note.destroy()
+      }
+
+      function stop() {
+        finished = true
+        noteGuard.stop()
+        noteProc.running = false
+        note.destroy()
+      }
+
+      Process {
+        id: noteProc
+        command: note.args
+        running: true
+        onStarted: note.launched = true
+        onRunningChanged: {
+          if (!running && !note.launched && !note.finished)
+            note.complete(Model.parseNotifyResult(-1, false))
+        }
+        onExited: function(exitCode) {
+          note.complete(Model.parseNotifyResult(exitCode, true))
+        }
+      }
+
+      Timer {
+        id: noteGuard
+        interval: note.guardMs
+        running: true
+        onTriggered: note.complete(Model.parseNotifyResult(-2, true))
       }
     }
   }

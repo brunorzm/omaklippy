@@ -140,3 +140,30 @@ test("follow-up helpers never throw", () => {
     assert.doesNotThrow(() => M.planDispatch(v, v, v, v))
   }
 })
+
+// ---- Slice 004: what the notifications need from each reading
+
+test("applyReading keeps the raw print and Klipper states", () => {
+  const base = M.initialStatus("k#0")
+  const printing = M.applyReading(base, reading("printing.synthetic"), 1000)
+  assert.deepEqual([printing.printState, printing.klippyState], ["printing", "ready"])
+  const done = M.applyReading(printing, reading("complete.synthetic"), 2000)
+  assert.deepEqual([done.state, done.printState], ["idle", "complete"])
+  const startup = M.applyReading(done, reading("startup.synthetic"), 3000)
+  assert.deepEqual([startup.state, startup.klippyState], ["error", "startup"])
+  const offline = M.applyReading(printing, reading("refused"), 4000)
+  assert.deepEqual([offline.printState, offline.klippyState], ["", ""])
+})
+
+test("planDispatch stamps requestedAt on the printers it asks, and applyReading keeps it", () => {
+  const ps = printers()
+  const s = M.reconcileStatuses({}, ps)
+  const out = M.planDispatch(s, ps, 3000, "", 1234)
+  assert.equal(out.statuses[ps[0].key].requestedAt, 1234)
+  assert.equal(out.statuses[ps[2].key].requestedAt, null, "invalid printer not asked")
+  assert.equal(M.planDispatch(s, ps, 3000).statuses[ps[0].key].requestedAt, null, "no now given")
+  const only = M.planDispatch(out.statuses, ps, 3000, ps[1].key, 9999)
+  assert.equal(only.statuses[ps[0].key].requestedAt, 1234, "not asked again")
+  const got = M.acceptResult(out.statuses, ps[0].key, 1, reading("printing.synthetic"), 2000)
+  assert.equal(got[ps[0].key].requestedAt, 1234)
+})

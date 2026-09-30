@@ -156,3 +156,15 @@ test("readSettings keeps webUrl from a printers list stored as text", () => {
   const s = M.readSettings({ printers: '[{"name":"Lab","address":"lab.local:7130","webUrl":"http://lab.local:8080"}]' })
   assert.equal(s.printers[0].webUrl, "http://lab.local:8080")
 })
+
+// ---- Slice 004: notification switches
+
+test("readSettings: every notification is on unless set to Off", () => {
+  assert.deepEqual(M.readSettings({}).notify, { complete: true, failed: true, paused: true, lostContact: true })
+  const keys = { notifyComplete: "complete", notifyFailed: "failed", notifyPaused: "paused", notifyLostContact: "lostContact" }
+  for (const [key, field] of Object.entries(keys)) {
+    for (const off of ["Off", "off", " OFF ", false]) assert.equal(M.readSettings({ [key]: off }).notify[field], false, key + "=" + off)
+    for (const on of ["On", true, "x", 5, null]) assert.equal(M.readSettings({ [key]: on }).notify[field], true, key + "=" + on)
+  }
+  assert.deepEqual(M.readSettings(null).notify, { complete: true, failed: true, paused: true, lostContact: true })
+})

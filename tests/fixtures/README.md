@@ -13,6 +13,9 @@ Each fixture is the raw output of one Moonraker query, exactly as the plugin rec
 `*.synthetic.json` files were written by hand from the Moonraker docs. All others were captured
 from real printers (Voron and Biqu B1) or from real curl failures.
 
+`standby-heating.synthetic.json` is `standby.synthetic.json` with the nozzle heating (target
+200 °C, at 134 °C) and no print: the "idle but heating" case of the slice 004 notifications.
+
 ## Capture from a real printer
 
 ```bash

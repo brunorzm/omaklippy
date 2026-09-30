@@ -49,7 +49,21 @@ var TEXT = {
   commandTimeout: "no response (timeout) — check the printer before trying again",
   launcherNotFound: "omarchy-launch-browser not found",
   launcherExitCode: "browser launcher exited with code %1",
-  launcherTimeout: "no answer from the browser launcher"
+  launcherTimeout: "no answer from the browser launcher",
+  notify: {
+    completeTitle: "Print complete",
+    failedTitle: "Print failed",
+    pausedTitle: "Print paused",
+    lostTitle: "Printer not responding",
+    withFile: "%1 — %2",
+    failedBody: "%1: %2",
+    lostBody: "%1 stopped answering during a print",
+    fileSuffix: " (%1)",
+    unavailable: "Notifications unavailable: %1",
+    notFound: "notify-send not found",
+    serviceUnavailable: "notification service unavailable (exit %1)",
+    timeout: "no answer from notify-send"
+  }
 }
 
 // %1 and %2 are replaced in one pass, so a value that itself contains "%2"
@@ -95,6 +109,13 @@ var WEB_LAUNCH_TIMEOUT_SEC = 10
 // Moonraker's own port; the web UI (Mainsail/Fluidd) sits on the host's
 // default port instead.
 var MOONRAKER_DEFAULT_PORT = 7125
+
+// Notifications: a printing printer that misses this many answers in a row
+// is reported as not responding; notify-send gets this long to exit.
+var NOTIFY_LOST_AFTER = 3
+var NOTIFY_TIMEOUT_SEC = 10
+var NOTIFY_APP_NAME = "OmaKlippy"
+var NOTIFY_ICON = "printer"
 
 var QUERY_PATH = "/printer/objects/query?webhooks&print_stats&virtual_sdcard&display_status" +
   "&extruder=temperature,target&heater_bed=temperature,target"
@@ -146,9 +167,22 @@ function toList(value, parseString) {
   return []
 }
 
+// Notification switches are "On"/"Off" enums in the schema (there is no
+// boolean type); a hand-edited false works too. Anything else means on.
+function switchOn(value) {
+  if (value === false) return false
+  return !(typeof value === "string" && value.trim().toLowerCase() === "off")
+}
+
 function readSettings(settings) {
   var s = settings !== null && typeof settings === "object" ? settings : {}
   return {
+    notify: {
+      complete: switchOn(s.notifyComplete),
+      failed: switchOn(s.notifyFailed),
+      paused: switchOn(s.notifyPaused),
+      lostContact: switchOn(s.notifyLostContact)
+    },
     printers: normalizePrinters(toList(s.printers, true)),
     intervalMs: clampInt(s.refreshIntervalSec, 2, 3600, DEFAULT_INTERVAL_SEC) * 1000,
     timeoutMs: clampInt(s.timeoutSec, 1, 30, DEFAULT_TIMEOUT_SEC) * 1000
@@ -432,7 +466,10 @@ function initialStatus(key) {
     offlineSince: null,
     pending: false,
     seq: 0,
-    followUp: false
+    followUp: false,
+    printState: "",
+    requestedAt: null,
+    klippyState: ""
   }
 }
 
@@ -448,6 +485,8 @@ function applyReading(prev, reading, now) {
     base.filename = ""
     base.nozzle = null
     base.bed = null
+    base.printState = ""
+    base.klippyState = ""
     base.offlineSince = base.state === "offline" && isObject(prev) && prev.state === "offline" && prev.offlineSince !== null && prev.offlineSince !== undefined
       ? prev.offlineSince : now
     return base
@@ -457,6 +496,8 @@ function applyReading(prev, reading, now) {
   base.filename = stringOr(r.filename, "")
   base.nozzle = r.nozzle || null
   base.bed = r.bed || null
+  base.printState = stringOr(r.printState, "")
+  base.klippyState = stringOr(r.klippyState, "")
   base.offlineSince = null
   if (r.httpStatus > 0) base.lastSeenAt = now
   return base
@@ -483,8 +524,9 @@ function reconcileStatuses(statuses, printers) {
 }
 
 // onlyKey (optional) limits the dispatch to one printer: the fresh query
-// right after a printer command.
-function planDispatch(statuses, printers, timeoutMs, onlyKey) {
+// right after a printer command. now (optional) is stamped as requestedAt, so
+// a reading can be told apart from one that left before a command answered.
+function planDispatch(statuses, printers, timeoutMs, onlyKey, now) {
   var next = copy(isObject(statuses) ? statuses : {})
   var only = typeof onlyKey === "string" && onlyKey !== "" ? onlyKey : ""
   var list = Array.isArray(printers) ? printers : []
@@ -499,6 +541,7 @@ function planDispatch(statuses, printers, timeoutMs, onlyKey) {
     updated.seq = (s.seq || 0) + 1
     updated.pending = true
     updated.followUp = false
+    updated.requestedAt = finiteOrNull(now)
     next[p.key] = updated
     requests.push({ key: p.key, seq: updated.seq, args: buildCurlArgs(buildQueryUrl(p.baseUrl), timeoutSec) })
   }
@@ -669,6 +712,200 @@ function reconcileCommands(commands, printers) {
     else removed = true
   }
   return removed ? next : commands
+}
+
+// ---- Notifications: what a new reading means, compared with the last
+//      answered one. Every widget instance keeps its own watches; only the
+//      leader (the first live instance) sends.
+
+function emptyWatch() {
+  return { seeded: false, last: null, silent: 0, lostNotified: false }
+}
+
+function heaterOn(h) {
+  return isObject(h) && (finiteOrNull(h.target) || 0) > 0
+}
+
+function snapshotOf(status) {
+  return {
+    state: status.state,
+    printState: stringOr(status.printState, ""),
+    filename: stringOr(status.filename, ""),
+    heating: heaterOn(status.nozzle) || heaterOn(status.bed)
+  }
+}
+
+// Klipper restarting (a FIRMWARE_RESTART, say) reads as an error but is not
+// a failure.
+function isFailure(status) {
+  return status.state === "error" && status.klippyState !== "startup"
+}
+
+function eventsFor(last, status) {
+  var events = []
+  var file = stringOr(status.filename, "") || last.filename
+  if (hasJob(last.state)) {
+    if (status.printState === "complete" && status.state !== "error") events.push({ type: "complete", filename: file })
+    else if (isFailure(status)) events.push({ type: "failed", filename: file, reason: stringOr(status.reason, "") })
+    else if (last.state === "printing" && status.state === "paused") events.push({ type: "paused", filename: file })
+  } else if (last.state === "idle" && last.heating && isFailure(status)) {
+    events.push({ type: "failed", filename: "", reason: stringOr(status.reason, "") })
+  }
+  return events
+}
+
+// Returns { watch, events }. The first answered reading only seeds the watch;
+// readings without an answer count towards "not responding" once a print was
+// running. protectedNow drops the events (a panel action caused them) but the
+// watch still moves on.
+function observe(watch, status, protectedNow) {
+  var w = isObject(watch) ? watch : emptyWatch()
+  if (!isObject(status) || typeof status.state !== "string") return { watch: w, events: [] }
+  var events = []
+  var next = copy(w)
+  if (status.state === "offline") {
+    if (!w.seeded) return { watch: w, events: [] }
+    next.silent = (finiteOrNull(w.silent) || 0) + 1
+    if (next.silent >= NOTIFY_LOST_AFTER && !w.lostNotified && isObject(w.last) && hasJob(w.last.state)) {
+      events.push({ type: "lostContact", filename: w.last.filename })
+      next.lostNotified = true
+    }
+  } else {
+    if (w.seeded && isObject(w.last)) events = eventsFor(w.last, status)
+    next.seeded = true
+    next.last = snapshotOf(status)
+    next.silent = 0
+    next.lostNotified = false
+  }
+  return { watch: next, events: protectedNow === true ? [] : events }
+}
+
+function reconcileWatches(watches, printers) {
+  if (!isObject(watches)) return {}
+  var list = Array.isArray(printers) ? printers : []
+  var keep = {}
+  for (var i = 0; i < list.length; i++) if (isObject(list[i])) keep[list[i].key] = true
+  var next = {}
+  var removed = false
+  for (var k in watches) {
+    if (keep[k]) next[k] = watches[k]
+    else removed = true
+  }
+  return removed ? next : watches
+}
+
+function filterEvents(events, prefs) {
+  var list = Array.isArray(events) ? events : []
+  var p = isObject(prefs) ? prefs : {}
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var e = list[i]
+    if (isObject(e) && p[e.type] !== false) out.push(e)
+  }
+  return out
+}
+
+function buildNotification(event, displayName) {
+  if (!isObject(event)) return null
+  var name = stringOr(displayName, "")
+  var file = stringOr(event.filename, "")
+  var suffix = file !== "" ? fill(TEXT.notify.fileSuffix, file) : ""
+  var urgency, title, body
+  if (event.type === "complete") {
+    urgency = "normal"; title = TEXT.notify.completeTitle
+    body = file !== "" ? fill(TEXT.notify.withFile, name, file) : name
+  } else if (event.type === "paused") {
+    urgency = "normal"; title = TEXT.notify.pausedTitle
+    body = file !== "" ? fill(TEXT.notify.withFile, name, file) : name
+  } else if (event.type === "failed") {
+    urgency = "critical"; title = TEXT.notify.failedTitle
+    body = fill(TEXT.notify.failedBody, name, stringOr(event.reason, "") || TEXT.unknown) + suffix
+  } else if (event.type === "lostContact") {
+    urgency = "critical"; title = TEXT.notify.lostTitle
+    body = fill(TEXT.notify.lostBody, name) + suffix
+  } else {
+    return null
+  }
+  return { urgency: urgency, title: title, body: body,
+    args: ["notify-send", "-a", NOTIFY_APP_NAME, "-u", urgency, "-i", NOTIFY_ICON, title, body] }
+}
+
+// exitCode -2 is the guard timer; launched false means the binary never ran.
+function parseNotifyResult(exitCode, launched) {
+  if (launched === false) return { ok: false, message: TEXT.notify.notFound }
+  if (exitCode === 0) return { ok: true, message: "" }
+  if (exitCode === -2) return { ok: false, message: TEXT.notify.timeout }
+  return { ok: false, message: fill(TEXT.notify.serviceUnavailable, exitCode) }
+}
+
+function notifyWarning(notifyState) {
+  if (!isObject(notifyState) || notifyState.available !== false) return ""
+  return fill(TEXT.notify.unavailable, stringOr(notifyState.message, "") || TEXT.unknown)
+}
+
+// ---- Widget instances sharing the shell (one per bar). The registry lives
+//      in Shared.js; these only compute its next value.
+
+function emptyRegistry() {
+  return { instances: [], next: 1 }
+}
+
+function registerInstance(reg) {
+  var r = isObject(reg) && Array.isArray(reg.instances) ? reg : emptyRegistry()
+  var id = finiteOrNull(r.next) || 1
+  return { registry: { instances: r.instances.concat([id]), next: id + 1 }, id: id }
+}
+
+function unregisterInstance(reg, id) {
+  if (!isObject(reg) || !Array.isArray(reg.instances) || reg.instances.indexOf(id) < 0) return reg
+  return { instances: reg.instances.filter(function(i) { return i !== id }), next: reg.next }
+}
+
+function isLeader(reg, id) {
+  return isObject(reg) && Array.isArray(reg.instances) && reg.instances.length > 0 && reg.instances[0] === id
+}
+
+// ---- Panel actions must not notify their own effect. A command (from any
+//      instance) protects its printer until every instance has read it once
+//      with a query that left after the answer: each bar polls on its own
+//      clock, so one bar reading late must not free another's older query.
+
+function protectStart(prot, key) {
+  var next = copy(isObject(prot) ? prot : {})
+  var cur = isObject(next[key]) ? next[key] : { pending: 0, answeredAt: null }
+  next[key] = { pending: (finiteOrNull(cur.pending) || 0) + 1, answeredAt: cur.answeredAt, released: {} }
+  return next
+}
+
+function protectFinish(prot, key, now) {
+  if (!isObject(prot) || !isObject(prot[key])) return prot
+  var cur = prot[key]
+  var next = copy(prot)
+  next[key] = { pending: Math.max(0, (finiteOrNull(cur.pending) || 0) - 1), answeredAt: finiteOrNull(now), released: {} }
+  return next
+}
+
+function isProtected(prot, key, id) {
+  if (!isObject(prot) || !isObject(prot[key])) return false
+  var released = isObject(prot[key].released) ? prot[key].released : {}
+  return released[id] !== true
+}
+
+function releaseProtection(prot, key, requestedAt, id, registry) {
+  if (!isObject(prot) || !isObject(prot[key])) return prot
+  var cur = prot[key]
+  var asked = finiteOrNull(requestedAt)
+  var answered = finiteOrNull(cur.answeredAt)
+  if (cur.pending !== 0 || asked === null || answered === null || asked < answered) return prot
+  var released = copy(isObject(cur.released) ? cur.released : {})
+  released[id] = true
+  var instances = isObject(registry) && Array.isArray(registry.instances) ? registry.instances : [id]
+  var all = true
+  for (var i = 0; i < instances.length; i++) if (released[instances[i]] !== true) all = false
+  var next = copy(prot)
+  if (all) delete next[key]
+  else next[key] = { pending: cur.pending, answeredAt: cur.answeredAt, released: released }
+  return next
 }
 
 // ---- View models
@@ -899,10 +1136,12 @@ function stepCursor(stops, current, delta) {
   return list[Math.max(0, Math.min(list.length - 1, at + (step > 0 ? 1 : step < 0 ? -1 : 0)))]
 }
 
-function buildPanelModel(printers, statusesByKey, selectedKey, now, commandsByKey) {
+function buildPanelModel(printers, statusesByKey, selectedKey, now, commandsByKey, notifyWarningText) {
   var list = Array.isArray(printers) ? printers : []
+  var warning = stringOr(notifyWarningText, "")
   if (list.length === 0) {
-    return { empty: true, selected: null, showJob: false, rows: [], options: [], actions: buildActionsModel(null, null, null) }
+    return { empty: true, selected: null, showJob: false, rows: [], options: [], actions: buildActionsModel(null, null, null),
+      notifyWarning: warning }
   }
   var key = resolveSelection(selectedKey, list, statusesByKey)
   var printer = list[0]
@@ -929,7 +1168,7 @@ function buildPanelModel(printers, statusesByKey, selectedKey, now, commandsByKe
   for (var k = 0; k < rows.length; k++) options.push({ value: rows[k].key, label: rows[k].optionLabel })
   var commands = isObject(commandsByKey) ? commandsByKey[printer.key] : null
   return { empty: false, selected: selected, showJob: hasJob(selected.state), rows: rows, options: options,
-    actions: buildActionsModel(printer, selectedStatus, commands) }
+    actions: buildActionsModel(printer, selectedStatus, commands), notifyWarning: warning }
 }
 
 if (typeof module !== "undefined") {
@@ -939,6 +1178,23 @@ if (typeof module !== "undefined") {
     ACTIONS: ACTIONS,
     ACTION_GLYPHS: ACTION_GLYPHS,
     COMMAND_TIMEOUT_SEC: COMMAND_TIMEOUT_SEC,
+    NOTIFY_LOST_AFTER: NOTIFY_LOST_AFTER,
+    NOTIFY_TIMEOUT_SEC: NOTIFY_TIMEOUT_SEC,
+    emptyWatch: emptyWatch,
+    observe: observe,
+    reconcileWatches: reconcileWatches,
+    filterEvents: filterEvents,
+    buildNotification: buildNotification,
+    parseNotifyResult: parseNotifyResult,
+    notifyWarning: notifyWarning,
+    emptyRegistry: emptyRegistry,
+    registerInstance: registerInstance,
+    unregisterInstance: unregisterInstance,
+    isLeader: isLeader,
+    protectStart: protectStart,
+    protectFinish: protectFinish,
+    isProtected: isProtected,
+    releaseProtection: releaseProtection,
     WEB_LAUNCH_TIMEOUT_SEC: WEB_LAUNCH_TIMEOUT_SEC,
     deriveWebUrl: deriveWebUrl,
     buildWebLaunchArgs: buildWebLaunchArgs,

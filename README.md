@@ -39,6 +39,28 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
 
 The bar icon itself has no controls; they live only in the panel.
 
+### Notifications
+
+A desktop notification tells you when something happens to a print, so you don't have to watch
+the icon:
+
+| Notification | When | Stays on screen |
+|--------------|------|-----------------|
+| **Print complete** | a printing or paused printer reports the print complete | no, it fades like any other |
+| **Print failed** | a printing or paused printer goes into error (print error, Klipper shutdown), or an idle printer with a heater on does | yes, until you close it |
+| **Print paused** | a printing printer pauses without the panel's Pause (filament runout, Mainsail, the printer's screen) | no |
+| **Printer not responding** | a printer that was printing misses 3 polls in a row (about 15 s by default) | yes, until you close it |
+
+- Cancelling never notifies, and neither does the effect of the panel's own Pause, Resume,
+  Cancel or Emergency stop.
+- Klipper restarting (a `FIRMWARE_RESTART`) is not a failure.
+- Nothing is notified for what was already true when the shell started.
+- With several monitors, each event notifies once.
+- With the desktop's Do Not Disturb on, the notifications go to its history instead of popping
+  up; OmaKlippy does not get around that.
+- If notifications cannot be shown, the panel says `Notifications unavailable: …`; everything
+  else keeps working.
+
 ## Install
 
 ```bash
@@ -58,6 +80,10 @@ without restarting.
 | `printers` | `[]` | List of `{ "name": "...", "address": "...", "webUrl": "..." }`. The address (Moonraker) accepts `host`, `host:port` or `http(s)://host[:port]`. Names may repeat; the panel then shows the address next to them. `webUrl` is optional, takes the same forms and is opened as typed by **Open web UI**; without it the button opens the address minus port 7125. An invalid `webUrl` only hides that printer's button. |
 | `refreshIntervalSec` | `5` | Time between polls, 2 to 3600 s. |
 | `timeoutSec` | `3` | Timeout for each poll, 1 to 30 s. Without an answer in time, the printer shows as offline. |
+| `notifyComplete` | `"On"` | `"On"` or `"Off"`: the **Print complete** notification. |
+| `notifyFailed` | `"On"` | `"On"` or `"Off"`: the **Print failed** notification. |
+| `notifyPaused` | `"On"` | `"On"` or `"Off"`: the **Print paused** notification. |
+| `notifyLostContact` | `"On"` | `"On"` or `"Off"`: the **Printer not responding** notification. |
 
 ```bash
 # Add printers (the list goes WITHOUT --json)
@@ -67,6 +93,9 @@ omarchy bar set io.github.brunorzm.omaklippy printers \
 # A printer whose web UI is not on the address's host and default port
 omarchy bar set io.github.brunorzm.omaklippy printers \
   '[{"name":"Lab","address":"lab.local:7130","webUrl":"http://lab.local:8080"}]'
+
+# Turn one notification off
+omarchy bar set io.github.brunorzm.omaklippy notifyPaused Off
 
 # Numeric settings (with --json)
 omarchy bar set io.github.brunorzm.omaklippy refreshIntervalSec 10 --json
@@ -112,6 +141,7 @@ Otherwise the printer shows as "error: unauthorized — allow this computer in t
 | Binary | When | What for |
 |--------|------|----------|
 | `curl` | required, at runtime | Polls each printer's Moonraker and sends the panel's commands (`POST`), always with a timeout (`--connect-timeout`/`--max-time`; 60 s total for commands). Without it, every printer shows as "error: curl not found" and commands fail with "curl not found". |
+| `notify-send` | optional, for the notifications | Sends the desktop notifications to the shell's notification service. Part of `libnotify`. Run without a shell, with a 10 s guard. Without it, the panel shows "Notifications unavailable: notify-send not found"; everything else keeps working. |
 | `omarchy-launch-browser` | required at runtime, for **Open web UI** only | Opens the web UI in the default browser, the way Omarchy does (its own systemd unit, window focused). Part of the `omarchy` package. Run without a shell, with a 10 s guard. Without it, the button shows "Open web UI failed: omarchy-launch-browser not found"; everything else keeps working. |
 | `node` | development only | Runs the tests for the pure logic (`node --test tests/`). |
 
@@ -126,6 +156,7 @@ No other external binary is ever run.
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
   press one of the panel's buttons (Cancel and Emergency stop only after you confirm).
 - Opens your default browser only when you press **Open web UI**.
+- Shows desktop notifications about your prints (each kind can be turned off).
 
 ## IPC
 

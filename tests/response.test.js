@@ -102,6 +102,9 @@ test("initialStatus is offline, waiting for the first answer", () => {
     pending: false,
     seq: 0,
     followUp: false, // slice 002: fresh query after a printer command
+    printState: "", // slice 004: raw print_stats.state, for notifications
+    requestedAt: null,
+    klippyState: "",
   })
 })
 

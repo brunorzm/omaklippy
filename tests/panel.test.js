@@ -159,9 +159,9 @@ test("buildPanelModel follows a manual selection", () => {
 })
 
 test("buildPanelModel without printers is the empty state", () => {
-  // Slice 002 adds the (empty) actions block to every panel model; 003 its web: null.
+  // Slice 002 adds the (empty) actions block to every panel model; 003 its web: null; 004 notifyWarning.
   assert.deepEqual(M.buildPanelModel([], {}, "", 0), { empty: true, selected: null, showJob: false, rows: [], options: [],
-    actions: { buttons: [], primary: [], emergency: null, web: null, failureText: "", filename: "" } })
+    actions: { buttons: [], primary: [], emergency: null, web: null, failureText: "", filename: "" }, notifyWarning: "" })
 })
 
 test("setupCommand is the exact command shown in the empty panel", () => {
@@ -262,4 +262,15 @@ test("an opening in flight takes Open web UI out of the cursor", () => {
   const opening = M.planOpenWeb({}, ender, 1).commands
   const m = M.buildPanelModel(printers, statuses, ender.key, 1000, opening)
   assert.deepEqual(M.cursorStops(m), ["printer", "pause", "cancel", "emergencyStop"])
+})
+
+// ---- Slice 004: notifications unavailable
+
+test("buildPanelModel carries the notifications warning, empty or not", () => {
+  const { printers, statuses } = fleet()
+  const w = "Notifications unavailable: notify-send not found"
+  assert.equal(M.buildPanelModel(printers, statuses, "", 1000).notifyWarning, "")
+  assert.equal(M.buildPanelModel(printers, statuses, "", 1000, {}, w).notifyWarning, w)
+  assert.equal(M.buildPanelModel([], {}, "", 0, {}, w).notifyWarning, w)
+  assert.equal(M.buildPanelModel([], {}, "", 0, {}, 5).notifyWarning, "")
 })

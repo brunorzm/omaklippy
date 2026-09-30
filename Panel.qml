@@ -485,6 +485,18 @@ Panel {
               }
             }
 
+            // Informational, not an alert: the printers still work without it.
+            Text {
+              visible: (root.panelModel.notifyWarning || "") !== ""
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: root.panelModel.notifyWarning || ""
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
             Text {
               visible: !root.panelModel.empty && (root.selected.freshnessText || "") !== ""
               width: parent.width
