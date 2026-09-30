@@ -57,4 +57,8 @@ qualquer estado, limpeza na troca de impressora e na próxima ação) e pela lei
   volta, sem impressoras (conhecido), painel vazio certo; `shell.json` restaurado do backup.
 - Conferido pelo usuário em 2026-09-30: o clique com o mouse em Open web UI abriu a interface
   web da Voron e da Biqu; FR-015: os botões do meio e direito no ícone não fazem nada.
-- Pendente: `omarchy plugin remove` + reinstalar depois do push.
+- Remover (2026-09-30, depois do push de `7f5e7df`, com cópia da pasta no scratchpad):
+  `omarchy plugin remove --yes` apagou a pasta e a entrada no `shell.json`; nenhum processo
+  `curl`/`omarchy-launch-browser` sobrou; nada do plugin fora da pasta. Reinstalado do GitHub
+  (`omarchy plugin add … --enable --yes`, `7f5e7df`, conteúdo igual ao da cópia), Voron e Biqu
+  recadastradas: painel com Voron idle, Emergency stop e Open web UI.

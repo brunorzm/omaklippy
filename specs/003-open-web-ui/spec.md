@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Implementada em 2026-09-30 (teste em hardware aprovado; remove/reinstalar pendente do push, ver [hardware-test.md](./hardware-test.md))
+**Status**: Concluída em 2026-09-30 (teste em hardware aprovado; teste de falha ao vivo não realizável, coberto por testes automáticos; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "abrir a interface WEB da impressora a partir do painel do plugin"
 
