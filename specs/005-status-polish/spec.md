@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft
+**Status**: Concluída em 2026-09-30 (teste em hardware aprovado na Voron; heat-soak validado com a fixture real da Voron, não ao vivo; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "polimento do status: mostrar a mensagem do Klipper (display_status.message) no painel; tempo restante melhor no início da impressão usando a estimativa do fatiador; marcador de pausa no ícone da barra"
 

@@ -77,4 +77,9 @@ impressão real contra 1901 s estimados pelo fatiador (4% a mais).
 
 ## Ciclo de vida
 
-Pendente: `omarchy plugin remove` + reinstalar depois do push.
+Remover (2026-09-30, depois do push de `e80b4cd`, com cópia da pasta no scratchpad):
+`omarchy plugin remove --yes` apagou a pasta e a entrada no `shell.json`; nenhum `curl` (status,
+comandos ou metadados) nem `notify-send` sobrando. Reinstalado do GitHub (`e80b4cd`, conteúdo
+igual ao da cópia), `.specify/feature.json` restaurado, Voron e Biqu recadastradas, shell
+reiniciado: painel com a Voron ociosa **sem** a linha de mensagem, embora a impressora ainda
+exiba "Imprimindo" (FR-004 confirmado ao vivo), e sem aviso de notificações indisponíveis.
