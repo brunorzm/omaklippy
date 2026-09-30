@@ -125,9 +125,9 @@ metadados ok → `Layer 5/13`; sem `info` → sem linha.
 - [X] T015 [P] Atualizar `README.md`: `Ends` (24 h, "tomorrow"/dia), `Layer` (só quando a impressora informa a camada; no OrcaSlicer, o comando de troca de camada que grava `SET_PRINT_STATS_INFO`) e o tempo restante no tooltip
 - [X] T016 [P] Em `manifest.json`, `version` de `0.5.0` para `0.6.0`
 - [X] T017 [P] Auditorias: Princípios VIII, I e III como na 005
-- [ ] T018 (2026-09-30 com o falso: conclusão → 1 notificação, Escape, disable/enable sem `curl` sobrando. **Falta**: remove/reinstalar depois do push) Ciclo de vida ([quickstart §3](./quickstart.md#3-ciclo-de-vida-princípio-vi)): o de sempre com o Moonraker falso; `remove`/reinstalar só depois do push, com cópia da pasta e `.specify/feature.json` restaurado
+- [X] T018 (2026-09-30 com o falso: conclusão → 1 notificação, Escape, disable/enable sem `curl` sobrando. remove/reinstalar feito depois do push de `0678b75`) Ciclo de vida ([quickstart §3](./quickstart.md#3-ciclo-de-vida-princípio-vi)): o de sempre com o Moonraker falso; `remove`/reinstalar só depois do push, com cópia da pasta e `.specify/feature.json` restaurado
 - [X] T019 (2026-09-30, Voron: "Ends 17:24" a partir da primeira extrusão, fim real 17:24:27; aquecimento de ~17 min sem horário após a correção T021; tooltip conferido pelo usuário; `Layer` escondida; ver `hardware-test.md`) Teste em hardware ([quickstart §4](./quickstart.md#4-teste-em-hardware-princípio-vii)) **com o usuário** na Voron: `Ends` contra o relógio da barra (±1 min), tooltip (usuário), linha `Layer` escondida (metade negativa do SC-003); a metade positiva do SC-003 (camada igual à da interface web) só é conferida ao vivo se o usuário ativar o comando de camada no OrcaSlicer, passo **opcional**; senão fica coberta pelo Moonraker falso (T014) e registrada assim no `hardware-test.md`; registrar em `specs/006-print-finish-info/hardware-test.md`
-- [ ] T020 Marcar a fatia como concluída no `spec.md` só depois de T018 (com remove/reinstalar) e T019
+- [X] T020 Marcar a fatia como concluída no `spec.md` só depois de T018 (com remove/reinstalar) e T019
 
 ---
 

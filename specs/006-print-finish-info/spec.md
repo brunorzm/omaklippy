@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft
+**Status**: Concluída em 2026-09-30 (teste em hardware aprovado na Voron depois da correção do aquecimento, FR-013; camada real só com o Moonraker falso, a Voron não a informa; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "quando termina: horário previsto de término e camada atual/total no painel; tempo restante no tooltip do ícone da barra"
 

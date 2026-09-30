@@ -54,4 +54,8 @@ errado por ~17 minutos.
 ## Ciclo de vida
 
 Com o Moonraker falso: conclusão → 1 notificação, Escape, disable/enable sem `curl` sobrando.
-Pendente: `omarchy plugin remove` + reinstalar depois do push.
+Remover (2026-09-30, depois do push de `0678b75`, com cópia da pasta no scratchpad):
+`omarchy plugin remove --yes` apagou a pasta e a entrada no `shell.json`; nenhum `curl` nem
+`notify-send` sobrando. Reinstalado do GitHub (`0678b75`, conteúdo igual ao da cópia),
+`.specify/feature.json` restaurado, Voron e Biqu recadastradas, shell reiniciado: painel com a
+Voron ociosa, sem `Ends`, `Layer` nem mensagem.
