@@ -76,4 +76,11 @@ mostra o aviso com tudo funcionando.
 ## Ciclo de vida
 
 Escape, summon/hide, restart do shell, hot reload, disable/enable conferidos com o Moonraker
-falso. Pendente: `omarchy plugin remove` + reinstalar depois do push.
+falso.
+
+Remover (2026-09-30, depois do push de `44d5060`, com cópia da pasta no scratchpad):
+`omarchy plugin remove --yes` apagou a pasta e a entrada no `shell.json`; nenhum processo `curl`,
+`notify-send` ou `omarchy-launch-browser` sobrou. Reinstalado do GitHub
+(`omarchy plugin add … --enable --yes`, `44d5060`, conteúdo igual ao da cópia), Voron e Biqu
+recadastradas, shell reiniciado: painel com Voron idle, sem o aviso de notificações
+indisponíveis (a sondagem do `notify-send` passou), notificações ligadas por padrão.

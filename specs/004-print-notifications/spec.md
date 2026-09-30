@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft
+**Status**: Concluída em 2026-09-30 (teste em hardware aprovado na Voron; falha e contato perdido validados só com o Moonraker falso, por segurança; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "notificações no desktop: avisar quando a impressão termina, falha ou pausa sozinha (ex.: fim de filamento)"
 
