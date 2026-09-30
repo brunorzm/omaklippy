@@ -159,9 +159,9 @@ test("buildPanelModel follows a manual selection", () => {
 })
 
 test("buildPanelModel without printers is the empty state", () => {
-  // Slice 002 adds the (empty) actions block to every panel model.
+  // Slice 002 adds the (empty) actions block to every panel model; 003 its web: null.
   assert.deepEqual(M.buildPanelModel([], {}, "", 0), { empty: true, selected: null, showJob: false, rows: [], options: [],
-    actions: { buttons: [], primary: [], emergency: null, failureText: "", filename: "" } })
+    actions: { buttons: [], primary: [], emergency: null, web: null, failureText: "", filename: "" } })
 })
 
 test("setupCommand is the exact command shown in the empty panel", () => {
@@ -195,7 +195,7 @@ test("buildPanelModel without commands still carries the selected printer's acti
   const { printers, statuses } = fleet()
   const m = M.buildPanelModel(printers, statuses, "", 1000)
   assert.equal(m.selected.displayName, "Ender")
-  assert.deepEqual(m.actions.buttons.map(b => b.id), ["pause", "cancel", "emergencyStop"])
+  assert.deepEqual(m.actions.buttons.map(b => b.id), ["pause", "cancel", "emergencyStop", "openWebUi"])
   assert.equal(m.actions.failureText, "")
 })
 
@@ -207,18 +207,18 @@ test("buildPanelModel uses the commands of the selected printer only", () => {
   assert.deepEqual(m.actions, M.buildActionsModel(ender, statuses[ender.key], running[ender.key]))
   assert.equal(m.actions.primary[0].busy, true)
   const other = M.buildPanelModel(printers, statuses, printers[0].key, 1000, running)
-  assert.deepEqual(other.actions.buttons.map(b => [b.id, b.busy]), [["emergencyStop", false]])
+  assert.deepEqual(other.actions.buttons.map(b => [b.id, b.busy]), [["emergencyStop", false], ["openWebUi", false]])
 })
 
 test("cursorStops lists the dropdown and the enabled buttons in reading order", () => {
   const { printers, statuses } = fleet()
   const m = M.buildPanelModel(printers, statuses, printers[1].key, 1000)
-  assert.deepEqual(M.cursorStops(m), ["printer", "pause", "cancel", "emergencyStop"])
+  assert.deepEqual(M.cursorStops(m), ["printer", "pause", "cancel", "emergencyStop", "openWebUi"])
   const one = single("printing.synthetic", 1000)
-  assert.deepEqual(M.cursorStops(M.buildPanelModel(one.printers, one.statuses, "", 1000)), ["pause", "cancel", "emergencyStop"])
+  assert.deepEqual(M.cursorStops(M.buildPanelModel(one.printers, one.statuses, "", 1000)), ["pause", "cancel", "emergencyStop", "openWebUi"])
   const running = M.planCommand({}, printers[1], statuses[printers[1].key], "pause", 3000, 1).commands
   const busy = M.buildPanelModel(printers, statuses, printers[1].key, 1000, running)
-  assert.deepEqual(M.cursorStops(busy), ["printer", "emergencyStop"], "disabled buttons are skipped")
+  assert.deepEqual(M.cursorStops(busy), ["printer", "emergencyStop", "openWebUi"], "disabled buttons are skipped")
   assert.deepEqual(M.cursorStops(M.buildPanelModel([], {}, "", 0)), [])
 })
 
@@ -239,4 +239,27 @@ test("panel cursor functions never throw", () => {
     assert.deepEqual(M.cursorStops(v), [])
     assert.equal(typeof M.stepCursor(v, v, v), "string")
   }
+})
+
+// ---- Slice 003: Open web UI in the panel model and the cursor
+
+test("Open web UI is the last cursor stop in every state, and absent without a web address", () => {
+  const { printers, statuses } = fleet()
+  // Prusa answered "refused": offline, so only the web UI is left.
+  const offline = M.buildPanelModel(printers, statuses, printers[2].key, 1000)
+  assert.equal(offline.selected.state, "offline")
+  assert.deepEqual(M.cursorStops(offline), ["printer", "openWebUi"])
+  const bad = M.normalizePrinters([{ name: "Bad", address: "a b" }])
+  const badModel = M.buildPanelModel(bad, M.reconcileStatuses({}, bad), "", 1000)
+  assert.deepEqual(badModel.actions.buttons, [])
+  assert.deepEqual(M.cursorStops(badModel), [])
+  assert.equal(M.buildPanelModel([], {}, "", 0).actions.web, null)
+})
+
+test("an opening in flight takes Open web UI out of the cursor", () => {
+  const { printers, statuses } = fleet()
+  const ender = printers[1]
+  const opening = M.planOpenWeb({}, ender, 1).commands
+  const m = M.buildPanelModel(printers, statuses, ender.key, 1000, opening)
+  assert.deepEqual(M.cursorStops(m), ["printer", "pause", "cancel", "emergencyStop"])
 })

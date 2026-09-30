@@ -36,7 +36,7 @@ var TEXT = {
     bed: "Bed",
     printer: "Printer"
   },
-  actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop" },
+  actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop", openWebUi: "Open web UI" },
   confirm: {
     back: "Back",
     cancelPrint: "Cancel print",
@@ -46,7 +46,10 @@ var TEXT = {
     emergencyMessage: "Emergency stop %1? Klipper will shut down until a firmware restart."
   },
   actionFailed: "%1 failed: %2",
-  commandTimeout: "no response (timeout) — check the printer before trying again"
+  commandTimeout: "no response (timeout) — check the printer before trying again",
+  launcherNotFound: "omarchy-launch-browser not found",
+  launcherExitCode: "browser launcher exited with code %1",
+  launcherTimeout: "no answer from the browser launcher"
 }
 
 // %1 and %2 are replaced in one pass, so a value that itself contains "%2"
@@ -78,12 +81,20 @@ var ACTION_GLYPHS = {
   resume: "\u{f040a}",         // nf-md-play
   cancel: "\u{f04db}",         // nf-md-stop
   emergencyStop: "\u{f0028}",  // nf-md-alert_octagon
-  busy: "\u{f0772}"            // nf-md-loading
+  busy: "\u{f0772}",           // nf-md-loading
+  openWebUi: "\u{f03cc}"       // nf-md-open_in_new
 }
 
 // Macros behind pause/resume/cancel can park, wait for moves and reheat, so
 // commands get far more time than a status query (whose maximum is 30 s).
 var COMMAND_TIMEOUT_SEC = 60
+
+// Opening the web UI: the launcher answers in well under a second (research
+// R1); a hung one is given up on after this long.
+var WEB_LAUNCH_TIMEOUT_SEC = 10
+// Moonraker's own port; the web UI (Mainsail/Fluidd) sits on the host's
+// default port instead.
+var MOONRAKER_DEFAULT_PORT = 7125
 
 var QUERY_PATH = "/printer/objects/query?webhooks&print_stats&virtual_sdcard&display_status" +
   "&extruder=temperature,target&heater_bed=temperature,target"
@@ -169,6 +180,15 @@ function normalizeAddress(text) {
   return scheme + "://" + hostPort + path
 }
 
+// The web UI of a printer whose Moonraker address is baseUrl: the same URL,
+// minus Moonraker's default port.
+function deriveWebUrl(baseUrl) {
+  if (typeof baseUrl !== "string" || baseUrl === "") return ""
+  var m = /^(https?:\/\/[^/:]+):(\d+)(\/.*)?$/.exec(baseUrl)
+  if (m && Number(m[2]) === MOONRAKER_DEFAULT_PORT) return m[1] + (m[3] || "")
+  return baseUrl
+}
+
 function hostOf(baseUrl) {
   var m = /^https?:\/\/([^/]+)/.exec(baseUrl || "")
   return m ? m[1] : ""
@@ -183,12 +203,16 @@ function normalizePrinters(list) {
     var order = out.length
     var baseUrl = normalizeAddress(item.address)
     var name = stringOr(item.name, "").trim()
+    // An informed web address wins as typed (even on port 7125); an invalid
+    // one only hides the button. Without it, the web UI is derived.
+    var webText = stringOr(item.webUrl, "").trim()
     out.push({
       key: baseUrl + "#" + order,
       order: order,
       name: name,
       address: item.address,
       baseUrl: baseUrl,
+      webUrl: webText !== "" ? normalizeAddress(webText) : deriveWebUrl(baseUrl),
       invalidReason: baseUrl === "" ? TEXT.invalidAddress : "",
       displayName: name !== "" ? name : (baseUrl !== "" ? hostOf(baseUrl) : item.address.trim())
     })
@@ -521,7 +545,7 @@ function availableActions(state) {
 }
 
 function emptyCommands() {
-  return { busy: null, estop: null, failure: null, seq: 0 }
+  return { busy: null, estop: null, web: null, failure: null, seq: 0 }
 }
 
 function commandsFor(commands, key) {
@@ -567,6 +591,7 @@ function acceptCommandResult(commands, key, seq, result) {
   var slot = ""
   if (isObject(cur.busy) && cur.busy.seq === seq) slot = "busy"
   else if (isObject(cur.estop) && cur.estop.seq === seq) slot = "estop"
+  else if (isObject(cur.web) && cur.web.seq === seq) slot = "web"
   if (slot === "") return commands
   var action = cur[slot].action
   var entry = copy(cur)
@@ -580,6 +605,40 @@ function acceptCommandResult(commands, key, seq, result) {
   var next = copy(commands)
   next[key] = entry
   return next
+}
+
+// ---- Opening the web UI: no request to the printer, just the desktop's
+//      browser launcher, tracked in its own slot so it never waits on (or
+//      holds up) a printer command.
+
+function buildWebLaunchArgs(url) {
+  if (typeof url !== "string" || url === "") return []
+  return ["omarchy-launch-browser", url]
+}
+
+// exitCode -2 is the guard timer; launched false means the binary never ran.
+function parseWebLaunchResult(exitCode, launched) {
+  if (launched === false) return { ok: false, message: TEXT.launcherNotFound }
+  if (exitCode === 0) return { ok: true, message: "" }
+  if (exitCode === -2) return { ok: false, message: TEXT.launcherTimeout }
+  return { ok: false, message: fill(TEXT.launcherExitCode, exitCode) }
+}
+
+function planOpenWeb(commands, printer, now) {
+  var refused = { commands: commands, request: null }
+  if (!isObject(printer) || typeof printer.key !== "string" || typeof printer.webUrl !== "string" || printer.webUrl === "") return refused
+  var cur = commandsFor(commands, printer.key)
+  if (cur.web) return refused
+  var entry = copy(cur)
+  entry.seq = (finiteOrNull(cur.seq) || 0) + 1
+  entry.web = { action: "openWebUi", seq: entry.seq, startedAt: finiteOrNull(now) || 0 }
+  entry.failure = null
+  var next = copy(isObject(commands) ? commands : {})
+  next[printer.key] = entry
+  return {
+    commands: next,
+    request: { key: printer.key, seq: entry.seq, args: buildWebLaunchArgs(printer.webUrl), guardMs: WEB_LAUNCH_TIMEOUT_SEC * 1000 }
+  }
 }
 
 // Switching printers in the panel drops every shown failure (the one a
@@ -749,11 +808,12 @@ function detailFor(printer, status, now) {
   }
 }
 
-// The action buttons for one printer. enabled is exactly "planCommand would
-// send it now"; failureText shows even when no button does (a printer that
-// went offline after the failure).
+// The action buttons for one printer. enabled is exactly "planCommand (or
+// planOpenWeb) would send it now"; failureText shows even when no button does
+// (a printer that went offline after the failure). Open web UI shows in every
+// state as long as the printer has a web address, always last.
 function buildActionsModel(printer, status, printerCommands) {
-  var model = { buttons: [], primary: [], emergency: null, failureText: "", filename: "" }
+  var model = { buttons: [], primary: [], emergency: null, web: null, failureText: "", filename: "" }
   if (!isObject(printer) || !isObject(status)) return model
   var pc = isObject(printerCommands) ? printerCommands : emptyCommands()
   var wrapped = {}
@@ -774,6 +834,18 @@ function buildActionsModel(printer, status, printerCommands) {
     model.buttons.push(button)
     if (id === "emergencyStop") model.emergency = button
     else model.primary.push(button)
+  }
+  if (typeof printer.webUrl === "string" && printer.webUrl !== "") {
+    model.web = {
+      id: "openWebUi",
+      label: TEXT.actions.openWebUi,
+      glyph: ACTION_GLYPHS.openWebUi,
+      confirm: false,
+      urgent: false,
+      busy: isObject(pc.web),
+      enabled: planOpenWeb(wrapped, printer, 0).request !== null
+    }
+    model.buttons.push(model.web)
   }
   model.failureText = isObject(pc.failure) ? stringOr(pc.failure.message, "") : ""
   model.filename = stringOr(status.filename, "")
@@ -805,7 +877,7 @@ function confirmLabel(action) {
 }
 
 // Keyboard stops of the panel, in reading order: the printer dropdown, then
-// every button that can be pressed right now.
+// every button that can be pressed right now, Open web UI last.
 function cursorStops(panelModel) {
   var stops = []
   if (!isObject(panelModel)) return stops
@@ -814,6 +886,7 @@ function cursorStops(panelModel) {
   var primary = Array.isArray(a.primary) ? a.primary : []
   for (var i = 0; i < primary.length; i++) if (primary[i].enabled) stops.push(primary[i].id)
   if (isObject(a.emergency) && a.emergency.enabled) stops.push(a.emergency.id)
+  if (isObject(a.web) && a.web.enabled) stops.push(a.web.id)
   return stops
 }
 
@@ -866,6 +939,11 @@ if (typeof module !== "undefined") {
     ACTIONS: ACTIONS,
     ACTION_GLYPHS: ACTION_GLYPHS,
     COMMAND_TIMEOUT_SEC: COMMAND_TIMEOUT_SEC,
+    WEB_LAUNCH_TIMEOUT_SEC: WEB_LAUNCH_TIMEOUT_SEC,
+    deriveWebUrl: deriveWebUrl,
+    buildWebLaunchArgs: buildWebLaunchArgs,
+    parseWebLaunchResult: parseWebLaunchResult,
+    planOpenWeb: planOpenWeb,
     fill: fill,
     readSettings: readSettings,
     normalizeAddress: normalizeAddress,

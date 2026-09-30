@@ -80,8 +80,28 @@ BarWidget {
     dispatch(key)
   }
 
-  // Stops status queries and printer commands alike; both live in
-  // requestHolder and carry their printer key.
+  // Opens the printer's web UI in the default browser. Nothing is sent to
+  // the printer; the launcher runs in its own slot, beside any command.
+  function openWebUi(key) {
+    var printer = null
+    for (var i = 0; i < config.printers.length; i++)
+      if (config.printers[i].key === key) printer = config.printers[i]
+    var plan = Model.planOpenWeb(commands, printer, Date.now())
+    commands = plan.commands
+    var r = plan.request
+    if (r && r.args.length > 0)
+      webLaunchComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: r.guardMs })
+  }
+
+  // The panel closes only once the launcher exits cleanly, so a failure
+  // can still be shown in it. No follow-up query: the printer did not change.
+  function acceptWebLaunch(key, seq, result) {
+    commands = Model.acceptCommandResult(commands, key, seq, result)
+    if (result.ok && opened) close()
+  }
+
+  // Stops status queries, printer commands and web UI launches alike; all
+  // live in requestHolder and carry their printer key.
   function stopRequests(onlyMissing) {
     var list = requestHolder.children
     for (var i = list.length - 1; i >= 0; i--) {
@@ -323,6 +343,61 @@ BarWidget {
         interval: job.guardMs
         running: true
         onTriggered: job.complete(Model.parseActionResponse("", 28))
+      }
+    }
+  }
+
+  Component {
+    id: webLaunchComponent
+
+    // One omarchy-launch-browser run. It exits as soon as the browser's
+    // systemd unit is up, so only a missing or hung launcher is caught here
+    // (research R1). Exactly one result reaches acceptWebLaunch.
+    Item {
+      id: launch
+      required property string key
+      required property int seq
+      required property var args
+      required property int guardMs
+
+      property bool finished: false
+      property bool launched: false
+
+      function complete(result) {
+        if (finished) return
+        finished = true
+        launchGuard.stop()
+        launchProc.running = false
+        root.acceptWebLaunch(key, seq, result)
+        launch.destroy()
+      }
+
+      function stop() {
+        finished = true
+        launchGuard.stop()
+        launchProc.running = false
+        launch.destroy()
+      }
+
+      Process {
+        id: launchProc
+        command: launch.args
+        running: true
+        onStarted: launch.launched = true
+        onRunningChanged: {
+          if (!running && !launch.launched && !launch.finished)
+            launch.complete(Model.parseWebLaunchResult(-1, false))
+        }
+        onExited: function(exitCode) {
+          launch.complete(Model.parseWebLaunchResult(exitCode, true))
+        }
+      }
+
+      Timer {
+        id: launchGuard
+        interval: launch.guardMs
+        running: true
+        onTriggered: launch.complete(Model.parseWebLaunchResult(-2, true))
       }
     }
   }

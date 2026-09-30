@@ -89,7 +89,7 @@ function plan(commands, st, act, printer) {
 }
 
 test("emptyCommands", () => {
-  assert.deepEqual(M.emptyCommands(), { busy: null, estop: null, failure: null, seq: 0 })
+  assert.deepEqual(M.emptyCommands(), { busy: null, estop: null, web: null, failure: null, seq: 0 })
 })
 
 test("planCommand accepts an available action and fills the busy slot", () => {
@@ -97,7 +97,7 @@ test("planCommand accepts an available action and fills the busy slot", () => {
   const input = {}
   const r = plan(input, status("printing"), "pause")
   assert.deepEqual(input, {})
-  assert.deepEqual(r.commands[p.key], { busy: { action: "pause", seq: 1, startedAt: NOW }, estop: null, failure: null, seq: 1 })
+  assert.deepEqual(r.commands[p.key], { busy: { action: "pause", seq: 1, startedAt: NOW }, estop: null, web: null, failure: null, seq: 1 })
   assert.deepEqual(r.request, {
     key: p.key, seq: 1, action: "pause",
     args: M.buildActionArgs(p.baseUrl, "pause", 3), guardMs: 61000 })
@@ -152,6 +152,24 @@ test("acceptCommandResult frees the matching slot and records failures", () => {
   assert.equal(M.acceptCommandResult(failed, "gone#9", 1, { ok: true, message: "" }), failed)
 })
 
+test("planCommand ignores the web slot (FR-014)", () => {
+  const p = printers()[0]
+  const opening = M.planOpenWeb({}, p, NOW).commands
+  for (const act of ["pause", "cancel", "emergencyStop"]) assert.notEqual(plan(opening, status("printing"), act).request, null, act)
+})
+
+test("acceptCommandResult frees the web slot and labels its failure", () => {
+  const key = printers()[0].key
+  const opening = M.planOpenWeb({}, printers()[0], NOW).commands
+  const ok = M.acceptCommandResult(opening, key, 1, { ok: true, message: "" })
+  assert.equal(ok[key].web, null)
+  assert.equal(ok[key].failure, null)
+  const failed = M.acceptCommandResult(opening, key, 1, { ok: false, message: "x" })
+  assert.equal(failed[key].web, null)
+  assert.deepEqual(failed[key].failure, { action: "openWebUi", message: "Open web UI failed: x" })
+  assert.equal(M.acceptCommandResult(opening, key, 7, { ok: true, message: "" }), opening, "wrong seq")
+})
+
 test("a new command clears the previous failure", () => {
   const key = printers()[0].key
   const a = plan({}, status("printing"), "pause")
@@ -188,7 +206,7 @@ test("buildActionsModel: buttons per state", () => {
   assert.deepEqual(printing.primary.map(b => [b.id, b.enabled]), [["pause", true], ["cancel", true]])
   assert.equal(printing.emergency.id, "emergencyStop")
   assert.equal(printing.emergency.enabled, true)
-  assert.deepEqual(printing.buttons.map(b => b.id), ["pause", "cancel", "emergencyStop"])
+  assert.deepEqual(printing.buttons.map(b => b.id), ["pause", "cancel", "emergencyStop", "openWebUi"])
   assert.equal(printing.filename, "hook.gcode")
   assert.deepEqual(model("paused").primary.map(b => b.id), ["resume", "cancel"])
   const idle = model("idle")
@@ -196,7 +214,8 @@ test("buildActionsModel: buttons per state", () => {
   assert.equal(idle.emergency.id, "emergencyStop")
   for (const s of ["error", "offline"]) {
     const m = model(s)
-    assert.deepEqual(m.buttons, [])
+    assert.deepEqual(m.buttons.map(b => b.id), ["openWebUi"], "only the web UI (slice 003)")
+    assert.deepEqual(m.primary, [])
     assert.equal(m.emergency, null)
   }
 })
@@ -227,7 +246,9 @@ test("buildActionsModel: enabled matches planCommand everywhere", () => {
     for (const c of variants) {
       const st = status(state)
       for (const b of M.buildActionsModel(p, st, c ? c[p.key] : undefined).buttons) {
-        const accepted = M.planCommand(c || {}, p, st, b.id, 3000, 0).request !== null
+        const accepted = b.id === "openWebUi"
+          ? M.planOpenWeb(c || {}, p, 0).request !== null
+          : M.planCommand(c || {}, p, st, b.id, 3000, 0).request !== null
         assert.equal(b.enabled, accepted, state + "/" + b.id)
       }
     }
@@ -238,6 +259,8 @@ test("buildActionsModel never throws", () => {
   for (const v of [null, undefined, {}, "lixo"]) {
     const m = M.buildActionsModel(v, v, v)
     assert.deepEqual(m.buttons, [])
+    assert.ok("web" in m)
+    assert.equal(m.web, null)
     assert.equal(m.failureText, "")
   }
 })
@@ -289,7 +312,7 @@ test("buildActionsModel shows a failure even when no button is left (printer wen
   const a = plan({}, status("printing"), "pause")
   const failed = M.acceptCommandResult(a.commands, key, 1, { ok: false, message: "connection refused" })
   const m = model("offline", failed)
-  assert.deepEqual(m.buttons, [])
+  assert.deepEqual(m.buttons.map(b => b.id), ["openWebUi"])
   assert.equal(m.failureText, "Pause failed: connection refused")
 })
 
@@ -303,4 +326,35 @@ test("confirmMessage lets a long file name without spaces wrap (seen on the Voro
 
 test("real Voron capture of a pause POST (Moonraker v0.11) is a success", () => {
   assert.deepEqual(action("action-ok"), { ok: true, message: "" })
+})
+
+// ---- Slice 003: Open web UI button
+
+test("buildActionsModel: Open web UI in every state", () => {
+  const expected = { id: "openWebUi", label: "Open web UI", glyph: M.ACTION_GLYPHS.openWebUi, confirm: false, urgent: false, busy: false, enabled: true }
+  for (const s of ["printing", "paused", "idle", "error", "offline"]) {
+    const m = model(s)
+    assert.deepEqual(m.web, expected, s)
+    assert.deepEqual(m.buttons[m.buttons.length - 1], expected, s + ": last button")
+    assert.ok(m.primary.every(b => b.id !== "openWebUi"))
+  }
+})
+
+test("buildActionsModel: no Open web UI without a web address", () => {
+  const bad = printers()[1]
+  const m = M.buildActionsModel(bad, Object.assign(M.initialStatus(bad.key), { state: "offline" }), undefined)
+  assert.equal(m.web, null)
+  assert.deepEqual(m.buttons, [])
+})
+
+test("buildActionsModel: Open web UI while opening and while a command runs", () => {
+  const p = printers()[0]
+  const opening = M.planOpenWeb({}, p, NOW).commands
+  const m = model("printing", opening)
+  assert.deepEqual([m.web.busy, m.web.enabled], [true, false])
+  assert.deepEqual(m.primary.map(b => b.enabled), [true, true], "commands stay available (FR-014)")
+  for (const act of ["pause", "emergencyStop"]) {
+    const running = plan({}, status("printing"), act).commands
+    assert.deepEqual([model("printing", running).web.busy, model("printing", running).web.enabled], [false, true], act)
+  }
 })

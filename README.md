@@ -29,9 +29,15 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
     their own. After an emergency stop Klipper stays in "error" until you restart the firmware
     (from Mainsail/Fluidd).
   - Keyboard: `j`/`k` walk the dropdown and the buttons, Enter or Space presses.
+- **Open web UI** (last row of the panel, in any state, even error or offline): opens the
+  selected printer's Mainsail/Fluidd in your default browser and closes the panel. Nothing is
+  sent to the printer, and it works while a pause/resume/cancel is still running. The address
+  is the printer's own, without Moonraker's port 7125 (`voron.local` and `voron.local:7125`
+  both open `http://voron.local`); set `webUrl` when the web UI lives elsewhere. If the browser
+  cannot be launched, the panel stays open with the reason (e.g.
+  `Open web UI failed: omarchy-launch-browser not found`).
 
-The bar icon itself has no controls; they live only in the panel. Opening the web UI is not
-there yet.
+The bar icon itself has no controls; they live only in the panel.
 
 ## Install
 
@@ -49,7 +55,7 @@ without restarting.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `printers` | `[]` | List of `{ "name": "...", "address": "..." }`. The address accepts `host`, `host:port` or `http(s)://host[:port]`. Names may repeat; the panel then shows the address next to them. |
+| `printers` | `[]` | List of `{ "name": "...", "address": "...", "webUrl": "..." }`. The address (Moonraker) accepts `host`, `host:port` or `http(s)://host[:port]`. Names may repeat; the panel then shows the address next to them. `webUrl` is optional, takes the same forms and is opened as typed by **Open web UI**; without it the button opens the address minus port 7125. An invalid `webUrl` only hides that printer's button. |
 | `refreshIntervalSec` | `5` | Time between polls, 2 to 3600 s. |
 | `timeoutSec` | `3` | Timeout for each poll, 1 to 30 s. Without an answer in time, the printer shows as offline. |
 
@@ -57,6 +63,10 @@ without restarting.
 # Add printers (the list goes WITHOUT --json)
 omarchy bar set io.github.brunorzm.omaklippy printers \
   '[{"name":"Voron","address":"voron.local"},{"name":"Ender","address":"192.168.1.51:7125"}]'
+
+# A printer whose web UI is not on the address's host and default port
+omarchy bar set io.github.brunorzm.omaklippy printers \
+  '[{"name":"Lab","address":"lab.local:7130","webUrl":"http://lab.local:8080"}]'
 
 # Numeric settings (with --json)
 omarchy bar set io.github.brunorzm.omaklippy refreshIntervalSec 10 --json
@@ -102,6 +112,7 @@ Otherwise the printer shows as "error: unauthorized — allow this computer in t
 | Binary | When | What for |
 |--------|------|----------|
 | `curl` | required, at runtime | Polls each printer's Moonraker and sends the panel's commands (`POST`), always with a timeout (`--connect-timeout`/`--max-time`; 60 s total for commands). Without it, every printer shows as "error: curl not found" and commands fail with "curl not found". |
+| `omarchy-launch-browser` | required at runtime, for **Open web UI** only | Opens the web UI in the default browser, the way Omarchy does (its own systemd unit, window focused). Part of the `omarchy` package. Run without a shell, with a 10 s guard. Without it, the button shows "Open web UI failed: omarchy-launch-browser not found"; everything else keeps working. |
 | `node` | development only | Runs the tests for the pure logic (`node --test tests/`). |
 
 No other external binary is ever run.
@@ -114,6 +125,7 @@ No other external binary is ever run.
   `~/.config/omarchy/shell.json`, written by the shell itself.
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
   press one of the panel's buttons (Cancel and Emergency stop only after you confirm).
+- Opens your default browser only when you press **Open web UI**.
 
 ## IPC
 

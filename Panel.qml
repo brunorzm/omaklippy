@@ -26,7 +26,7 @@ Panel {
   readonly property var selected: panelModel.selected || ({})
 
   readonly property var rows: panelModel.rows || []
-  readonly property var actions: panelModel.actions || ({ buttons: [], primary: [], emergency: null, failureText: "", filename: "" })
+  readonly property var actions: panelModel.actions || ({ buttons: [], primary: [], emergency: null, web: null, failureText: "", filename: "" })
   readonly property bool showActions: actions.buttons.length > 0 || actions.failureText !== ""
   // Keyboard stops: the printer dropdown, then every button that can be
   // pressed now (Model.cursorStops). j/k/h/l walk them, Enter activates;
@@ -78,6 +78,12 @@ Panel {
   function activate(id) {
     var button = buttonFor(id)
     if (!button || stops.indexOf(id) < 0 || !hostWidget) return
+    // Nothing goes to the printer: the widget opens its web UI and closes
+    // the panel once the browser is on its way.
+    if (id === "openWebUi") {
+      hostWidget.openWebUi(selected.key)
+      return
+    }
     if (!button.confirm) {
       hostWidget.runAction(selected.key, id)
       return
@@ -434,6 +440,21 @@ Panel {
                 width: parent.width
                 actionData: root.actions.emergency || ({})
                 background: enabled ? Util.alpha(root.urgent, root.emergencyFillAlpha) : "transparent"
+              }
+
+              // The printer's web UI, in every state, on its own row after the
+              // stop and kept apart from it the same way Cancel is.
+              Item {
+                visible: webButton.visible && (emergencyButton.visible || primaryRow.visible)
+                width: parent.width
+                height: Style.space(12)
+              }
+
+              ActionButton {
+                id: webButton
+                visible: !!root.actions.web
+                width: parent.width
+                actionData: root.actions.web || ({})
               }
 
               // The reason in the foreground color (a grey urgent, as on Solitude, would

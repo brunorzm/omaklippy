@@ -114,3 +114,45 @@ test("disambiguateNames leaves unique names alone and is exported", () => {
   const list = M.disambiguateNames([{ name: "A", displayName: "A", baseUrl: "http://a", address: "a" }])
   assert.equal(list[0].displayName, "A")
 })
+
+// ---- Slice 003: web UI address
+
+test("normalizePrinters derives webUrl from the address, without Moonraker's port", () => {
+  const list = M.normalizePrinters([
+    { name: "Voron", address: "voron.local" },
+    { name: "Ender", address: "ender.local:7125" },
+    { name: "P", address: "https://p.lan:7125/x" },
+    { name: "Bad", address: "a b" },
+  ])
+  assert.deepEqual(list.map(p => p.webUrl), ["http://voron.local", "http://ender.local", "https://p.lan/x", ""])
+  assert.deepEqual(list.map(p => p.key), ["http://voron.local#0", "http://ender.local:7125#1", "https://p.lan:7125/x#2", "#3"])
+  assert.equal(list[1].baseUrl, "http://ender.local:7125", "status still goes to Moonraker")
+  assert.equal(list[1].displayName, "Ender")
+})
+
+test("normalizePrinters: an informed webUrl wins, as typed, without touching status or identity", () => {
+  const list = M.normalizePrinters([
+    { name: "Lab", address: "lab.local:7130", webUrl: "http://lab.local:8080" },
+    { name: "V", address: "voron.local", webUrl: "voron.local:7125" },
+    { name: "W", address: "h", webUrl: "http://h/web/" },
+    { name: "Bad1", address: "h1", webUrl: "a b" },
+    { name: "Bad2", address: "h2", webUrl: "ftp://x" },
+    { name: "E1", address: "e1:7125", webUrl: "" },
+    { name: "E2", address: "e2:7125", webUrl: "   " },
+    { name: "E3", address: "e3:7125", webUrl: 5 },
+    { name: "E4", address: "e4:7125", webUrl: null },
+    { name: "BadAddr", address: "a b", webUrl: "http://ok" },
+  ])
+  assert.deepEqual(list.map(p => p.webUrl), [
+    "http://lab.local:8080", "http://voron.local:7125", "http://h/web", "", "",
+    "http://e1", "http://e2", "http://e3", "http://e4", "http://ok"])
+  assert.equal(list[0].baseUrl, "http://lab.local:7130")
+  assert.equal(list[0].key, "http://lab.local:7130#0")
+  assert.deepEqual([list[3].baseUrl, list[3].invalidReason, list[3].key], ["http://h1", "", "http://h1#3"])
+  assert.equal(list[9].invalidReason, "invalid address")
+})
+
+test("readSettings keeps webUrl from a printers list stored as text", () => {
+  const s = M.readSettings({ printers: '[{"name":"Lab","address":"lab.local:7130","webUrl":"http://lab.local:8080"}]' })
+  assert.equal(s.printers[0].webUrl, "http://lab.local:8080")
+})
