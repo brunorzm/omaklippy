@@ -5,12 +5,21 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
 
 - **In the bar**: just the printer icon. While printing, a thin progress bar sits under the icon
   (dimmed while paused, with a small pause mark in the corner). On error the icon gets a badge in
-  the theme's alert color; when the printer is offline the icon is faded. Hover shows one line: `Voron — printing 42%`.
+  the theme's alert color; when the printer is offline the icon is faded. Hover shows one line: `Voron — printing 42% · 26m left` (the time left only while it is known).
 - **In the panel** (click the icon): state, progress, what the printer says it is doing (its
   display message, e.g. `Heating chamber`, only while printing or paused), file, time remaining,
-  nozzle and bed temperatures, and how long ago the last answer came in.
+  when it ends (`Ends 16:52`, `tomorrow 02:10` or the weekday; 24 h, on this computer's clock),
+  the layer (`Layer 12/62`, see below), nozzle and bed temperatures, and how long ago the last
+  answer came in.
+- **Layer** shows only when the printer reports the current layer, which Klipper does when the
+  sliced file sets it with `SET_PRINT_STATS_INFO` (in OrcaSlicer: Printer settings → Machine
+  G-code → Layer change G-code: `SET_PRINT_STATS_INFO CURRENT_LAYER={layer_num + 1}`, and
+  `SET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]` in the start G-code). Without the total,
+  the file's layer count is used.
 - **Time remaining** starts from the slicer's estimate saved in the file, so it shows from the
-  first minute (even during a chamber heat-soak), and leans more and more on the actual progress
+  first minute. While the printer is still warming up (heat-soak, homing, leveling: nothing
+  extruded yet) it reads `6m + warm-up`, with no finish time, since the warm-up length is unknown;
+  the tooltip says `warming up`. Then it leans more and more on the actual progress
   as the print advances. Once a print outlasts the slicer's estimate, only the progress counts.
   Files without a slicer estimate work as before (`—` until the print has advanced a little). With more than one printer, a "Printer"
   dropdown lets you pick which one to show (mouse, or `j`, Enter, then `j`/`k` and Enter).

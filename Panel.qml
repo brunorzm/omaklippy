@@ -382,6 +382,18 @@ Panel {
                 label: Model.TEXT.panel.remaining
                 value: root.selected.remainingText || "—"
               }
+
+              InfoRow {
+                visible: (root.selected.finishText || "") !== ""
+                label: Model.TEXT.panel.ends
+                value: root.selected.finishText || ""
+              }
+
+              InfoRow {
+                visible: (root.selected.layerText || "") !== ""
+                label: Model.TEXT.panel.layer
+                value: root.selected.layerText || ""
+              }
             }
 
             PanelSeparator {

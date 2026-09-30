@@ -109,6 +109,8 @@ test("initialStatus is offline, waiting for the first answer", () => {
     progress: null,
     printDuration: null,
     estimate: null,
+    currentLayer: null, // slice 006: the layer, when the printer reports it
+    totalLayer: null,
   })
 })
 
@@ -188,4 +190,21 @@ test("applyReading keeps the message, raw progress and printing time", () => {
   assert.equal(M.applyReading(base, parse("standby.synthetic"), 1000).progress, null, "no print, no progress")
   const off = M.applyReading(soak, parse("refused"), 2000)
   assert.deepEqual([off.message, off.progress, off.printDuration], ["", null, null])
+})
+
+// ---- Slice 006: layers, only as the printer reports them
+
+test("parseResponse and applyReading read print_stats.info layers", () => {
+  const r = parse("printing-layers.synthetic")
+  assert.deepEqual([r.currentLayer, r.totalLayer], [12, 62])
+  const n = parse("printing-layer-no-total.synthetic")
+  assert.deepEqual([n.currentLayer, n.totalLayer], [5, null])
+  for (const f of ["printing.synthetic", "printing"]) {
+    const x = parse(f)
+    assert.deepEqual([x.currentLayer, x.totalLayer], [null, null], f)
+  }
+  const s = M.applyReading(M.initialStatus("k#0"), parse("printing-layers.synthetic"), 1000)
+  assert.deepEqual([s.currentLayer, s.totalLayer], [12, 62])
+  const off = M.applyReading(s, parse("refused"), 2000)
+  assert.deepEqual([off.currentLayer, off.totalLayer], [null, null])
 })

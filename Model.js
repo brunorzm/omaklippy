@@ -34,7 +34,14 @@ var TEXT = {
     remaining: "Remaining",
     nozzle: "Nozzle",
     bed: "Bed",
-    printer: "Printer"
+    printer: "Printer",
+    ends: "Ends",
+    layer: "Layer"
+  },
+  finish: {
+    tomorrow: "tomorrow %1",
+    days: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   },
   actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop", openWebUi: "Open web UI" },
   confirm: {
@@ -46,6 +53,9 @@ var TEXT = {
     emergencyMessage: "Emergency stop %1? Klipper will shut down until a firmware restart."
   },
   actionFailed: "%1 failed: %2",
+  left: "%1 left",
+  plusWarmUp: "%1 + warm-up",
+  warmingUp: "warming up",
   commandTimeout: "no response (timeout) — check the printer before trying again",
   launcherNotFound: "omarchy-launch-browser not found",
   launcherExitCode: "browser launcher exited with code %1",
@@ -309,6 +319,14 @@ function parseMetadataResponse(stdout, exitCode) {
   return sec !== null && sec > 0 ? sec : null
 }
 
+// The file's layer count from the same metadata answer, or null.
+function parseMetadataLayers(stdout, exitCode) {
+  var t = readTransport(stdout, exitCode)
+  if (t.errorMessage || t.httpStatus < 200 || t.httpStatus >= 300) return null
+  var res = isObject(t.data) && isObject(t.data.result) ? t.data.result : null
+  return res ? layerNumber(res.layer_count, 1) : null
+}
+
 // Returns { statuses, requests }: one metadata fetch for each printer with a
 // print whose file has no estimate yet (a failed fetch counts: no retry
 // within the same print).
@@ -328,21 +346,22 @@ function planEstimate(statuses, printers, timeoutMs) {
     var seq = (isObject(st.estimate) ? finiteOrNull(st.estimate.seq) || 0 : 0) + 1
     if (!next) next = copy(src)
     var updated = copy(st)
-    updated.estimate = { filename: file, seconds: null, pending: true, seq: seq }
+    updated.estimate = { filename: file, seconds: null, layerCount: null, pending: true, seq: seq }
     next[p.key] = updated
     requests.push({ key: p.key, seq: seq, filename: file, args: buildMetadataArgs(p.baseUrl, file, timeoutSec) })
   }
   return { statuses: next || statuses, requests: requests }
 }
 
-function acceptEstimate(statuses, key, seq, filename, seconds) {
+function acceptEstimate(statuses, key, seq, filename, seconds, layerCount) {
   if (!isObject(statuses) || !isObject(statuses[key])) return statuses
   var e = statuses[key].estimate
   if (!isObject(e) || e.pending !== true || e.seq !== seq || e.filename !== filename) return statuses
   var next = copy(statuses)
   var st = copy(statuses[key])
   var sec = finiteOrNull(seconds)
-  st.estimate = { filename: e.filename, seconds: sec !== null && sec > 0 ? sec : null, pending: false, seq: e.seq }
+  st.estimate = { filename: e.filename, seconds: sec !== null && sec > 0 ? sec : null,
+    layerCount: layerNumber(layerCount, 1), pending: false, seq: e.seq }
   next[key] = st
   return next
 }
@@ -360,6 +379,12 @@ function buildActionArgs(baseUrl, action, connectTimeoutSec) {
 
 // ---- Response
 
+// A whole layer number no smaller than min, or null.
+function layerNumber(value, min) {
+  var n = finiteOrNull(value)
+  return n !== null && n === Math.floor(n) && n >= min ? n : null
+}
+
 function emptyReading() {
   return {
     reachable: true,
@@ -373,6 +398,8 @@ function emptyReading() {
     printDuration: null,
     filename: "",
     displayMessage: "",
+    currentLayer: null,
+    totalLayer: null,
     nozzle: null,
     bed: null
   }
@@ -454,6 +481,10 @@ function parseResponse(stdout, exitCode) {
   r.printMessage = stringOr(ps.message, "")
   r.filename = stringOr(ps.filename, "")
   r.displayMessage = stringOr(ds.message, "").trim()
+  // Only when the slicer writes SET_PRINT_STATS_INFO; the Voron leaves it empty.
+  var info = isObject(ps.info) ? ps.info : {}
+  r.currentLayer = layerNumber(info.current_layer, 0)
+  r.totalLayer = layerNumber(info.total_layer, 1)
   r.printDuration = finiteOrNull(ps.print_duration)
   r.progress = finiteOrNull(sd.progress)
   if (r.progress === null) r.progress = finiteOrNull(ds.progress)
@@ -503,6 +534,31 @@ function estimateRemaining(state, progress, printDuration) {
   return Math.max(0, d / p - d)
 }
 
+// "12/62" from the printer's current layer over its total, or the file's;
+// nothing when the printer does not report the current layer.
+function layerTextOf(status) {
+  var current = layerNumber(status.currentLayer, 0)
+  if (current === null) return ""
+  var total = layerNumber(status.totalLayer, 1)
+  if (total === null && isObject(status.estimate)) total = layerNumber(status.estimate.layerCount, 1)
+  return total === null ? "" : Math.min(current, total) + "/" + total
+}
+
+// A print that has not extruded anything yet (heat-soak, homing, leveling):
+// Klipper only starts print_duration at the first extrusion. The slicer's
+// time does not include this phase and its length is unknown, so no clock
+// time can be promised yet.
+function isWarmingUp(status) {
+  return isObject(status) && hasJob(status.state) && finiteOrNull(status.printDuration) === 0
+}
+
+// The remaining time the panel (and the tooltip) show for a status.
+function remainingOf(status) {
+  if (!isObject(status)) return null
+  return blendRemaining(status.remainingSec, isObject(status.estimate) ? status.estimate.seconds : null,
+    status.printDuration, status.progress)
+}
+
 // Remaining time from the slicer's estimate and the progress-based one: the
 // slicer alone at first, the progress more and more as the print advances.
 // Once the print outlasts the slicer, only the progress counts; nothing
@@ -548,7 +604,9 @@ function initialStatus(key) {
     message: "",
     progress: null,
     printDuration: null,
-    estimate: null
+    estimate: null,
+    currentLayer: null,
+    totalLayer: null
   }
 }
 
@@ -570,6 +628,8 @@ function applyReading(prev, reading, now) {
     base.message = ""
     base.progress = null
     base.printDuration = null
+    base.currentLayer = null
+    base.totalLayer = null
     base.offlineSince = base.state === "offline" && isObject(prev) && prev.state === "offline" && prev.offlineSince !== null && prev.offlineSince !== undefined
       ? prev.offlineSince : now
     return base
@@ -584,6 +644,8 @@ function applyReading(prev, reading, now) {
   base.message = stringOr(r.displayMessage, "")
   base.progress = hasJob(d.state) ? finiteOrNull(r.progress) : null
   base.printDuration = finiteOrNull(r.printDuration)
+  base.currentLayer = layerNumber(r.currentLayer, 0)
+  base.totalLayer = layerNumber(r.totalLayer, 1)
   // The slicer's estimate belongs to this print: gone once it ends or the
   // file changes, so the next print fetches it again.
   if (!hasJob(d.state) || !isObject(base.estimate) || base.estimate.filename !== base.filename) base.estimate = null
@@ -1032,6 +1094,16 @@ function summaryLine(printer, status) {
   return line
 }
 
+// The icon's tooltip: the summary line plus, while there is a print, how much
+// is left (the Printer menu keeps the plain summary line).
+function tooltipLine(printer, status) {
+  if (!isObject(printer) || !isObject(status)) return ""
+  var line = summaryLine(printer, status)
+  if (isWarmingUp(status)) return line + " · " + TEXT.warmingUp
+  var remaining = hasJob(status.state) ? remainingOf(status) : null
+  return remaining !== null ? line + " · " + fill(TEXT.left, formatDuration(remaining)) : line
+}
+
 // The icon stands for the printer picked in the panel during this session,
 // or, without a (still valid) pick, for the most relevant one.
 function buildIconState(printers, statusesByKey, selectedKey) {
@@ -1046,7 +1118,7 @@ function buildIconState(printers, statusesByKey, selectedKey) {
   if (!top) return { mode: "empty", progress: null, tooltip: TEXT.noPrintersTooltip }
   var st = top.status
   var progress = hasJob(st.state) && finiteOrNull(st.percent) !== null ? st.percent / 100 : null
-  return { mode: st.state, progress: progress, tooltip: summaryLine(top.printer, st) }
+  return { mode: st.state, progress: progress, tooltip: tooltipLine(top.printer, st) }
 }
 
 // The command the empty panel suggests. printers goes without --json: the
@@ -1074,6 +1146,28 @@ function formatDuration(sec) {
   var m = minutes % 60
   if (h === 0) return m + "m"
   return h + "h " + (m < 10 ? "0" : "") + m + "m"
+}
+
+function pad2(n) {
+  return (n < 10 ? "0" : "") + n
+}
+
+// When a print ends, on the computer's clock: "16:52" today, "tomorrow
+// 02:10", "Sat 08:00" within the week, "7 Oct 08:00" beyond. Always 24 h
+// (the user's bar clock is HH:mm even with a 12 h locale).
+function formatFinish(finishMs, nowMs) {
+  var f = finiteOrNull(finishMs)
+  var n = finiteOrNull(nowMs)
+  if (f === null || n === null) return ""
+  var end = new Date(Math.round(f / 60000) * 60000)
+  var today = new Date(n)
+  var clock = pad2(end.getHours()) + ":" + pad2(end.getMinutes())
+  var startOf = function(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() }
+  var days = Math.round((startOf(end) - startOf(today)) / 86400000)
+  if (days <= 0) return clock
+  if (days === 1) return fill(TEXT.finish.tomorrow, clock)
+  if (days <= 6) return TEXT.finish.days[end.getDay()] + " " + clock
+  return end.getDate() + " " + TEXT.finish.months[end.getMonth()] + " " + clock
 }
 
 function formatElapsed(ms) {
@@ -1111,6 +1205,8 @@ function detailFor(printer, status, now) {
   if (!isObject(printer)) printer = { key: "", displayName: "" }
   if (!isObject(status)) status = initialStatus(printer.key)
   var job = hasJob(status.state)
+  var remaining = job ? remainingOf(status) : null
+  var warmUp = isWarmingUp(status)
   var meta = stateLabel(status.state)
   if (job && status.percent !== null && status.percent !== undefined) meta += " · " + status.percent + "%"
   var freshness = ""
@@ -1131,8 +1227,9 @@ function detailFor(printer, status, now) {
     // A finished print leaves its last message behind (the Voron keeps
     // "Imprimindo"), so it only shows while there is a print.
     messageText: job ? stringOr(status.message, "") : "",
-    remainingText: job ? formatDuration(blendRemaining(status.remainingSec,
-      isObject(status.estimate) ? status.estimate.seconds : null, status.printDuration, status.progress)) : "",
+    remainingText: !job ? "" : (warmUp && remaining !== null ? fill(TEXT.plusWarmUp, formatDuration(remaining)) : formatDuration(remaining)),
+    layerText: job ? layerTextOf(status) : "",
+    finishText: job && !warmUp && remaining !== null ? formatFinish(finiteOrNull(now) + remaining * 1000, now) : "",
     nozzleText: formatTemp(status.nozzle),
     bedText: formatTemp(status.bed),
     showTemps: status.state !== "offline" && (!!status.nozzle || !!status.bed),
@@ -1320,6 +1417,9 @@ if (typeof module !== "undefined") {
     resolveSelection: resolveSelection,
     buildPanelModel: buildPanelModel,
     detailFor: detailFor,
+    formatFinish: formatFinish,
+    tooltipLine: tooltipLine,
+    parseMetadataLayers: parseMetadataLayers,
     buildMetadataArgs: buildMetadataArgs,
     parseMetadataResponse: parseMetadataResponse,
     planEstimate: planEstimate,

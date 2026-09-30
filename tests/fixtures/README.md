@@ -17,6 +17,11 @@ from real printers (Voron and Biqu B1) or from real curl failures.
 message ("Imprimindo"), as the Voron does after a print ends; `printing-message.synthetic.json` is
 `printing.synthetic.json` with a message padded with spaces. Both are for the slice 005 message.
 
+`printing-layers.synthetic.json` and `printing-layer-no-total.synthetic.json` are
+`printing.synthetic.json` with `print_stats.info` filled in (layer 12 of 62, and layer 5 with no
+total), as a printer whose slicer writes `SET_PRINT_STATS_INFO` reports it (slice 006). The real
+Voron fixtures have `info` empty.
+
 `standby-heating.synthetic.json` is `standby.synthetic.json` with the nozzle heating (target
 200 °C, at 134 °C) and no print: the "idle but heating" case of the slice 004 notifications.
 

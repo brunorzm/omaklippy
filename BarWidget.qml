@@ -68,8 +68,8 @@ BarWidget {
     }
   }
 
-  function acceptEstimate(key, seq, filename, seconds) {
-    statuses = Model.acceptEstimate(statuses, key, seq, filename, seconds)
+  function acceptEstimate(key, seq, filename, seconds, layerCount) {
+    statuses = Model.acceptEstimate(statuses, key, seq, filename, seconds, layerCount)
   }
 
   function accept(key, seq, reading) {
@@ -388,12 +388,12 @@ BarWidget {
       property int exitCode: -1
       property string output: ""
 
-      function complete(seconds) {
+      function complete(seconds, layerCount) {
         if (finished) return
         finished = true
         fetchGuard.stop()
         fetchProc.running = false
-        root.acceptEstimate(key, seq, filename, seconds)
+        root.acceptEstimate(key, seq, filename, seconds, layerCount)
         fetch.destroy()
       }
 
@@ -405,7 +405,7 @@ BarWidget {
       }
 
       function tryComplete() {
-        if (exited && drained) complete(Model.parseMetadataResponse(output, exitCode))
+        if (exited && drained) complete(Model.parseMetadataResponse(output, exitCode), Model.parseMetadataLayers(output, exitCode))
       }
 
       Process {

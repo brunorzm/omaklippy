@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\": {\"eventtime\": 578243.578, \"status\": {\"webhooks\": {\"state\": \"ready\", \"state_message\": \"Printer is ready\"}, \"print_stats\": {\"filename\": \"hook.gcode\", \"total_duration\": 1230.1, \"print_duration\": 1200.1, \"filament_used\": 1520.3, \"state\": \"printing\", \"message\": \"\", \"info\": {\"current_layer\": 12, \"total_layer\": 62}}, \"virtual_sdcard\": {\"progress\": 0.427, \"is_active\": true}, \"extruder\": {\"temperature\": 214.8, \"target\": 215.0}, \"display_status\": {\"message\": \"\", \"progress\": 0.427}, \"heater_bed\": {\"temperature\": 60.1, \"target\": 60.0}}}}\n200"
+}
