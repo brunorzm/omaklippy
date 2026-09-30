@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft
+**Status**: Concluída em 2026-09-30 (parada de emergência e reinício pelo painel aprovados na Voron; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "reiniciar o firmware pelo painel: botão para FIRMWARE_RESTART com confirmação, para recuperar a impressora de erro (depois de parada de emergência ou falha do MCU) sem abrir o Mainsail"
 

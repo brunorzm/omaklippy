@@ -54,4 +54,11 @@ anotações das tarefas T009 e T012.
 
 Clique, Escape (a confirmação consome o primeiro), `summon`/`hide`, `disable`/`enable` (o `enable`
 recria a entrada sem as impressoras, como antes; configuração restaurada do backup), reinício do
-shell com as consultas retomadas e nenhum `curl` sobrando. `remove`/reinstalar: depois do push.
+shell com as consultas retomadas e nenhum `curl` sobrando.
+
+Remover (2026-09-30, depois do push de `e015de3`, com cópia da pasta no scratchpad):
+`omarchy plugin remove --yes` apagou a pasta e a entrada no `shell.json`; logo depois ainda havia
+processos `curl` (não inspecionados), e nenhum depois do reinício do shell; nenhum `notify-send`.
+Reinstalado do GitHub (`e015de3`, conteúdo igual ao da cópia), `.specify/feature.json` restaurado,
+Voron e Biqu recadastradas, shell reiniciado: painel com a Voron ociosa, Emergency stop e Open web
+UI, sem Restart firmware.
