@@ -30,6 +30,8 @@ Os botões ficam abaixo das temperaturas e acima da linha "updated … ago", sep
 | ociosa | — | Emergency stop |
 | erro, offline, sem impressoras | — | — (só `failureText`, se houver) |
 
+> **Fatia 003**: esta tabela foi substituída pela do [display.md da 003](../../003-open-web-ui/contracts/display.md#posição-no-painel-fr-003) (FR-013 da 003): o botão Open web UI aparece em todos os estados, inclusive erro e offline, sempre que a impressora tem endereço de interface web.
+
 ## Botões
 
 `Button` (`qs.Ui`) com `bordered: true`, `iconText` = glifo da ação, `text` = rótulo,
