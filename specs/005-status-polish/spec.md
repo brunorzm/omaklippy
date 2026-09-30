@@ -145,6 +145,10 @@ relance, mas o painel e as notificações da fatia 004 já avisam.
 - **FR-005**: Quando o arquivo em impressão tem estimativa do fatiador, o tempo restante MUST
   aparecer desde o início da impressão, inclusive durante o aquecimento, a partir dessa
   estimativa.
+  *Correção (fatia 006, 2026-09-30, apontada pelo usuário no teste em hardware)*: durante o
+  aquecimento o tempo do fatiador não inclui o aquecimento; o painel passa a mostrar
+  "<tempo> + warm-up", e não o tempo sozinho. Ver o FR-013 da
+  [fatia 006](../006-print-finish-info/spec.md).
 - **FR-006**: Com estimativa do fatiador, o tempo restante MUST combinar duas estimativas: a do
   fatiador (duração prevista menos o tempo já impresso) e a pelo progresso (a das fatias
   anteriores). No início vale só a do fatiador; conforme o progresso avança, o peso passa
