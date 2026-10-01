@@ -34,6 +34,7 @@ BarWidget {
 
   function syncConfig() {
     statuses = Model.reconcileStatuses(statuses, config.printers)
+    syncLives()
     commands = Model.reconcileCommands(commands, config.printers)
     watches = Model.reconcileWatches(watches, config.printers)
     // A removed printer drops the manual choice for good, so it does not
@@ -59,6 +60,11 @@ BarWidget {
       var r = plan.requests[i]
       requestComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: config.timeoutMs + 1000 })
     }
+    sideFetches()
+  }
+
+  // Lookups driven by the status itself, after a poll or a live update.
+  function sideFetches() {
     // The slicer's estimate, once per print (Model.planEstimate).
     var est = Model.planEstimate(statuses, config.printers, config.timeoutMs)
     statuses = est.statuses
@@ -178,8 +184,10 @@ BarWidget {
     if (result.ok && running && running.action === "klipperRestart")
       statuses = Model.clearKlippyDown(statuses, key)
     commands = Model.acceptCommandResult(commands, key, seq, result)
-    statuses = Model.requestFollowUp(statuses, key)
-    dispatch(key)
+    // A live printer shows the command's effect through its connection.
+    var after = Model.afterCommand(statuses, key)
+    statuses = after.statuses
+    if (after.dispatch) dispatch(key)
   }
 
   // Opens the printer's web UI in the default browser. Nothing is sent to
@@ -995,6 +1003,125 @@ BarWidget {
         interval: step.guardMs
         running: true
         onTriggered: step.complete(-2, true)
+      }
+    }
+  }
+
+  // ---- Live status (slice 010): one connection per printer and per bar
+  //      (LiveConnection.qml), driven by Model's live machine. A printer is
+  //      polled only while it is not live.
+  property var lives: ({})
+  // "key|url" per connection: the Repeater model, changed only when the set
+  // of connections does (lives itself changes with every message).
+  property var liveIds: []
+  // { key: LiveConnection } for the loaded connections; not reactive.
+  property var liveItems: ({})
+  // The QtWebSockets module is missing: polling only, with a notice.
+  property bool liveUnavailable: false
+  readonly property string liveWarningText: Model.liveWarning(liveUnavailable)
+
+  function syncLives() {
+    lives = Model.reconcileLives(lives, config.printers)
+    var ids = []
+    for (var key in lives) ids.push(key + "|" + lives[key].url)
+    if (ids.join("\n") !== liveIds.join("\n")) liveIds = ids
+  }
+
+  function runLiveActions(actions) {
+    for (var i = 0; i < actions.length; i++) {
+      var a = actions[i]
+      var item = liveItems[a.key]
+      if (!item) continue
+      if (a.type === "open") {
+        item.url = lives[a.key] ? lives[a.key].url : ""
+        item.open()
+      } else if (a.type === "send") item.send(a.text)
+      else if (a.type === "ping") item.ping()
+      else if (a.type === "close") item.stop()
+    }
+  }
+
+  // The printer stopped being live: poll it at once instead of waiting.
+  function leaveLive(key) {
+    statuses = Model.leaveLive(statuses, key)
+    dispatch(key)
+  }
+
+  function flushLive(key, force) {
+    var f = Model.liveFlush(lives, key, force)
+    lives = f.lives
+    if (!f.reading) return
+    var before = statuses
+    statuses = Model.acceptLive(statuses, key, f.reading, Date.now())
+    if (statuses !== before) observe(key)
+    sideFetches()
+  }
+
+  function liveOpened(key) {
+    var r = Model.liveOpened(lives, key, Date.now())
+    lives = r.lives
+    runLiveActions(r.actions)
+  }
+
+  function liveMessage(key, text) {
+    var r = Model.liveMessage(lives, key, Model.parseLiveMessage(text), Date.now())
+    lives = r.lives
+    runLiveActions(r.actions)
+    if (r.left) leaveLive(key)
+    flushLive(key, false)
+  }
+
+  function livePong(key) {
+    lives = Model.livePong(lives, key, Date.now()).lives
+  }
+
+  function liveClosed(key) {
+    var r = Model.liveClosed(lives, key, Date.now())
+    lives = r.lives
+    if (r.left) leaveLive(key)
+  }
+
+  // Opens what is due, pings, gives up on silent connections and hands over
+  // what arrived in the last second.
+  Timer {
+    interval: 1000
+    repeat: true
+    running: !root.liveUnavailable && root.liveIds.length > 0
+    onTriggered: {
+      var r = Model.liveTick(root.lives, Date.now())
+      root.lives = r.lives
+      root.runLiveActions(r.actions)
+      for (var i = 0; i < r.left.length; i++) root.leaveLive(r.left[i])
+      for (var key in root.lives) root.flushLive(key, true)
+    }
+  }
+
+  Item {
+    id: liveHolder
+    visible: false
+
+    Repeater {
+      model: root.liveUnavailable ? [] : root.liveIds
+
+      Loader {
+        id: liveLoader
+        required property string modelData
+        readonly property string key: modelData.slice(0, modelData.lastIndexOf("|"))
+        source: Qt.resolvedUrl("LiveConnection.qml")
+        onStatusChanged: if (status === Loader.Error) root.liveUnavailable = true
+        onLoaded: root.liveItems[key] = item
+        Component.onDestruction: {
+          if (root.liveItems[key] === item) delete root.liveItems[key]
+        }
+
+        Connections {
+          target: liveLoader.item
+          ignoreUnknownSignals: true
+          function onOpened() { root.liveOpened(liveLoader.key) }
+          function onMessage(text) { root.liveMessage(liveLoader.key, text) }
+          function onPonged() { root.livePong(liveLoader.key) }
+          function onClosed(reason) { root.liveClosed(liveLoader.key) }
+        }
       }
     }
   }

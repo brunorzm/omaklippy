@@ -102,3 +102,24 @@ in the same `{ exitCode, stdout }` format.
 - `set-widget-ok.json`, `set-widget-error.synthetic.json`: the stdout of `omarchy-shell shell
   setBarWidget …` when the shell saves (`ok`) and when it refuses (`could not find widget …`; the
   command exits 0 in both cases).
+
+## Live connection fixtures (slice 010)
+
+`ws-*` fixtures are messages received over Moonraker's websocket, in a different shape:
+
+```json
+{ "message": "<the text frame as received>" }
+```
+
+- `ws-subscribe-voron.json`: the real answer to `printer.objects.subscribe` (the objects the
+  status query reads) from the idle Voron, 2026-10-01. Its `result.status` has the same shape as
+  the status query's.
+- `ws-update-voron.json`: a real `notify_status_update` (only the temperatures that moved; one
+  arrives about every 250 ms even with the printer idle).
+- `ws-update-printing.synthetic.json`: an update with `print_stats.state` `paused`, progress and a
+  nozzle target.
+- `ws-subscribe-error.synthetic.json`: the subscription refused while Klipper is disconnected (503).
+- `ws-klippy-disconnected.synthetic.json`, `ws-klippy-ready.synthetic.json`: Moonraker's
+  notifications when Klipper goes away and comes back (from the Moonraker docs).
+- `ws-proc-stat.synthetic.json`: a `notify_proc_stat_update`, trimmed (the real one, about once a
+  second, also carries the traffic counters of every network interface of the printer's computer).

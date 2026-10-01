@@ -19,7 +19,7 @@ Conferido: porta 7125 direta e porta 80 pelo nginx do Mainsail, nas duas impress
 ```
 
 - ao abrir e depois de cada `notify_klippy_ready`;
-- `ping` do protocolo WebSocket a cada 5 s com a inscrição ativa.
+- `ping` do protocolo WebSocket a cada 5 s com a conexão aberta (também esperando o Klipper).
 
 ## Recebido
 
@@ -40,7 +40,7 @@ Conferido: porta 7125 direta e porta 80 pelo nginx do Mainsail, nas duas impress
 |-------|-------|
 | entrega de atualizações | no máximo 1 por segundo por impressora; mudança de estado na hora |
 | ping | a cada 5 s |
-| conexão morta | 10 s sem nenhum quadro |
+| conexão morta | 9 s sem nenhum quadro (com o tique de 1 s, percebida em ≤10 s) |
 | reconexão | 2, 4, 8, 16, 30, 30… s; volta a 2 s depois de uma inscrição |
 
 ## Fixtures

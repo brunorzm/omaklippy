@@ -71,8 +71,9 @@ Medições de 2026-10-01, só com leitura (`server.info` e `printer.objects.subs
 
 ## R6. Conexão morta e reconexão (FR-005, FR-006, FR-010)
 
-- **Decision**: `ping` do protocolo a cada 5 s; a conexão é dada como morta quando passam **10 s sem
-  nenhum quadro** (mensagem ou `pong`; com as atualizações a ~4 por segundo, isso só acontece com a
+- **Decision**: `ping` do protocolo a cada 5 s com a conexão aberta (também quando ela espera o
+  Klipper); a conexão é dada como morta quando passam **9 s sem nenhum quadro** (com o tique de 1 s,
+  percebida em ≤10 s; medido 10,7 s com 10 s no servidor falso) (mensagem ou `pong`; com as atualizações a ~4 por segundo, isso só acontece com a
   conexão de fato parada). Morta ou fechada: a impressora volta à consulta periódica **na hora**
   (sem esperar um intervalo) e a reconexão espera 2, 4, 8, 16 e depois 30 s entre tentativas,
   voltando a 2 s quando uma inscrição dá certo.

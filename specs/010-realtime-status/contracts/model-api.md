@@ -29,7 +29,7 @@ liveInstall: "install qt6-websockets"
 |--------|----------|
 | `emptyLive(url)` | `{ state: "idle", url, attempt: 0, retryAt: null, lastFrameAt: null, subscribeId: 0, buffer: null, dirty: false, urgent: false }` |
 | `reconcileLives(lives, printers, now)` | uma entrada por impressora com `liveUrl` não vazio; as que saem somem; `url` mudou → nova |
-| `liveTick(lives, now)` | `{ lives, actions }`: `open` para `idle`/`waiting` vencidos; `ping` a cada 5 s em `subscribed`; `close` + `waiting` com 10 s sem quadro |
+| `liveTick(lives, now)` | `{ lives, actions }`: `open` para `idle`/`waiting` vencidos; `ping` a cada 5 s em `open`/`subscribed`; `close` + `waiting` com 9 s sem quadro |
 | `liveOpened(lives, key, now)` | `connecting` → `open`; ação `send` da inscrição (`subscribeId + 1`) |
 | `liveMessage(lives, key, parsed, now)` | atualiza `lastFrameAt` e aplica a transição do data-model; devolve `{ lives, actions, entered, left }` (`entered`: passou a `subscribed`; `left`: deixou de estar) |
 | `livePong(lives, key, now)` | só `lastFrameAt` |

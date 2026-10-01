@@ -1,7 +1,7 @@
 # OmaKlippy
 
 An [Omarchy](https://omarchy.org) Quattro plugin (`io.github.brunorzm.omaklippy`) that shows the
-status of your Klipper 3D printers in the bar, by polling the Moonraker API on your local network.
+status of your Klipper 3D printers in the bar, live from the Moonraker API on your local network.
 
 - **In the bar**: just the printer icon. While printing, a thin progress bar sits under the icon
   (dimmed while paused, with a small pause mark in the corner). On error the icon gets a badge in
@@ -10,7 +10,14 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
   display message, e.g. `Heating chamber`, only while printing or paused), file, time remaining,
   when it ends (`Ends 16:52`, `tomorrow 02:10` or the weekday; 24 h, on this computer's clock),
   the layer (`Layer 12/62`, see below), nozzle and bed temperatures, and how long ago the last
-  answer came in.
+  answer came in (`live` while the status arrives live, see below).
+- **Live updates**: each bar keeps a connection to every printer's Moonraker (its websocket,
+  subscribed read-only to the same status the plugin shows), so changes show within a second or two
+  and nothing is polled while it is up. Without it (the `qt6-websockets` package missing, the
+  printer refusing it, the connection dropping, Klipper disconnected) the plugin polls every
+  `refreshIntervalSec` as before, notices a dead connection within 10 s and reconnects on its own
+  (waiting 2 s, then up to 30 s between tries). Printer commands are always sent over HTTP, so the
+  emergency stop never depends on the connection.
 - **Layer** shows only when the printer reports the current layer, which Klipper does when the
   sliced file sets it with `SET_PRINT_STATS_INFO` (in OrcaSlicer: Printer settings → Machine
   G-code → Layer change G-code: `SET_PRINT_STATS_INFO CURRENT_LAYER={layer_num + 1}`, and
@@ -141,7 +148,7 @@ without restarting. Printers can be added and removed from the panel (above) or 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `printers` | `[]` | List of `{ "name": "...", "address": "...", "webUrl": "..." }`. The address (Moonraker) accepts `host`, `host:port` or `http(s)://host[:port]`. Names may repeat; the panel then shows the address next to them. `webUrl` is optional, takes the same forms and is opened as typed by **Open web UI**; without it the button opens the address minus port 7125. An invalid `webUrl` only hides that printer's button. |
-| `refreshIntervalSec` | `5` | Time between polls, 2 to 3600 s. |
+| `refreshIntervalSec` | `5` | Time between polls, 2 to 3600 s, while a printer is not live (see Live updates). |
 | `timeoutSec` | `3` | Timeout for each poll, 1 to 30 s. Without an answer in time, the printer shows as offline. |
 | `notifyComplete` | `"On"` | `"On"` or `"Off"`: the **Print complete** notification. |
 | `notifyFailed` | `"On"` | `"On"` or `"Off"`: the **Print failed** notification. |
@@ -210,6 +217,7 @@ Otherwise the printer shows as "error: unauthorized — allow this computer in t
 | `curl` | required, at runtime | Polls each printer's Moonraker and sends the panel's commands (`POST`), always with a timeout (`--connect-timeout`/`--max-time`; 60 s total for commands). Without it, every printer shows as "error: curl not found" and commands fail with "curl not found". |
 | `notify-send` | optional, for the notifications | Sends the desktop notifications to the shell's notification service. Part of `libnotify`. Run without a shell, with a 10 s guard. Without it, the panel shows "Notifications unavailable: notify-send not found"; everything else keeps working. |
 | `omarchy-launch-browser` | required at runtime, for **Open web UI** only | Opens the web UI in the default browser, the way Omarchy does (its own systemd unit, window focused). Part of the `omarchy` package. Run without a shell, with a 10 s guard. Without it, the button shows "Open web UI failed: omarchy-launch-browser not found"; everything else keeps working. |
+| QtWebSockets (`qt6-websockets`) | optional, for live updates | The QML module behind the live connection to each printer. Not part of Omarchy (here it came with `nextcloud-client`). Without it, the panel shows "Live updates unavailable: install qt6-websockets" and the plugin polls as before; everything else keeps working. |
 | `omarchy-shell` | required, to add or remove printers from the panel | Asks the shell to save the new printer list (`omarchy-shell shell setBarWidget …`). Part of the `omarchy` package. Run without a shell, with a 5 s guard. Without it, adding and removing show "Could not save the printers: omarchy-shell not found"; everything else keeps working. |
 | `ip` | required, for the network check in **Search network** | Lists this computer's local networks (`ip -j -4 addr show`). Part of `iproute2`. Without it, the search uses announcements only and says so. |
 | `avahi-browse`, `avahi-resolve` | optional, for **Search network** | Read Moonraker announcements (`avahi-browse -rtp _moonraker._tcp`) and the name on the network of each printer found (`avahi-resolve -a`). Part of `avahi`. Without them, the search uses the network check only (and says so) and printers found are saved by IP. |
@@ -225,6 +233,8 @@ No other external binary is ever run.
   `~/.config/omarchy/shell.json`, written by the shell itself.
 - Searches the local network only when you press **Search network**, with `GET` requests to
   Moonraker's info endpoints only.
+- Keeps one connection per bar to each printer you add, only to subscribe to its status (read-only)
+  and to ping it; nothing else is sent over it.
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
   press one of the panel's buttons (Cancel, Emergency stop, Restart firmware and Restart Klipper only after you confirm).
 - Opens your default browser only when you press **Open web UI**.

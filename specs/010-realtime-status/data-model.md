@@ -25,8 +25,8 @@ open         --resposta erro-->    open              (Klipper fora: fica na cons
 subscribed   --notify_status_update--> subscribed    buffer = merge; dirty (urgent se estado)
 subscribed   --notify_klippy_disconnected--> open    buffer = null (volta à consulta periódica)
 open/subscribed --notify_klippy_ready--> open        ação: send subscribe (id+1)
-qualquer aberta --10 s sem quadro / fechou / erro--> waiting   retryAt = now + 2,4,8,16,30 s; ação: close
-subscribed   --a cada 5 s-->       subscribed        ação: ping
+qualquer aberta --9 s sem quadro / fechou / erro--> waiting   retryAt = now + 2,4,8,16,30 s; ação: close
+open/subscribed --a cada 5 s-->    (mesmo)           ação: ping
 ```
 
 ## Status da impressora (o de hoje, `statuses[key]`) — campos novos

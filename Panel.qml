@@ -601,6 +601,17 @@ Panel {
               }
 
               Text {
+                visible: root.hostWidget && (root.hostWidget.liveWarningText || "") !== ""
+                width: parent.width
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                text: root.hostWidget ? root.hostWidget.liveWarningText || "" : ""
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Text {
                 visible: !root.panelModel.empty && (root.selected.freshnessText || "") !== ""
                 width: parent.width
                 textFormat: Text.PlainText

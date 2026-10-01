@@ -27,6 +27,9 @@ var TEXT = {
   noPrintersTooltip: "OmaKlippy — no printers configured",
   updatedAgo: "updated %1 ago",
   noResponseFor: "no response for %1",
+  live: "live",
+  liveUnavailable: "Live updates unavailable: %1",
+  liveInstall: "install qt6-websockets",
   panel: {
     file: "File",
     remaining: "Remaining",
@@ -576,8 +579,22 @@ function parseResponse(stdout, exitCode) {
     r.errorMessage = TEXT.unexpectedResponse
     return r
   }
+  var live = readingFromStatus(data.result.status)
+  live.reachable = t.reachable
+  live.httpStatus = t.httpStatus
+  return live
+}
 
-  var st = data.result.status
+// A reading from Moonraker's status objects (result.status of a query, or the
+// status the live connection keeps): an answered 200 by definition.
+function readingFromStatus(status) {
+  var r = emptyReading()
+  r.httpStatus = 200
+  if (!isObject(status)) {
+    r.errorMessage = TEXT.unexpectedResponse
+    return r
+  }
+  var st = status
   var wh = isObject(st.webhooks) ? st.webhooks : {}
   var ps = isObject(st.print_stats) ? st.print_stats : {}
   var sd = isObject(st.virtual_sdcard) ? st.virtual_sdcard : {}
@@ -821,7 +838,8 @@ function planDispatch(statuses, printers, timeoutMs, onlyKey, now) {
     var p = list[i]
     var s = next[p.key]
     if (!isObject(p) || (only !== "" && p.key !== only)) continue
-    if (!s || p.invalidReason || s.pending) continue
+    // Live printers get their status from the connection (slice 010).
+    if (!s || p.invalidReason || s.pending || s.live === true) continue
     var updated = copy(s)
     updated.seq = (s.seq || 0) + 1
     updated.pending = true
@@ -1392,6 +1410,8 @@ function detailFor(printer, status, now) {
   var freshness = ""
   if (status.state === "offline") {
     if (finiteOrNull(status.offlineSince) !== null) freshness = fill(TEXT.noResponseFor, formatElapsed(now - status.offlineSince))
+  } else if (status.live === true) {
+    freshness = TEXT.live
   } else if (finiteOrNull(status.lastSeenAt) !== null) {
     freshness = fill(TEXT.updatedAgo, formatElapsed(now - status.lastSeenAt))
   }
@@ -2189,6 +2209,301 @@ function panelStops(panelModel, setupModel, inSetup) {
   return cursorStops(panelModel).concat(["openSetup"])
 }
 
+// ---- Live status (slice 010): Moonraker's websocket. The connection only
+//      subscribes to the same objects the status query reads; commands stay
+//      on HTTP. Messages arrive about 4 times a second even with the printer
+//      idle (temperatures move), plus a 1 s notify_proc_stat_update that is
+//      dropped unread.
+
+var LIVE_OBJECTS = {
+  webhooks: null, print_stats: null, virtual_sdcard: null, display_status: null,
+  extruder: ["temperature", "target"], heater_bed: ["temperature", "target"]
+}
+var LIVE_IGNORED_PREFIX = '{"jsonrpc":"2.0","method":"notify_proc_stat_update"'
+
+function liveUrl(baseUrl) {
+  var m = /^(https?):\/\/(.+)$/.exec(typeof baseUrl === "string" ? baseUrl : "")
+  if (!m) return ""
+  return (m[1] === "https" ? "wss" : "ws") + "://" + m[2].replace(/\/+$/, "") + "/websocket"
+}
+
+function buildSubscribeMessage(id) {
+  return JSON.stringify({ jsonrpc: "2.0", method: "printer.objects.subscribe", id: finiteOrNull(id) || 0,
+    params: { objects: LIVE_OBJECTS } })
+}
+
+// { kind, id, status, diff, message }; kind is result, error, update,
+// klippyReady, klippyDisconnected or ignore.
+function parseLiveMessage(text) {
+  var out = { kind: "ignore", id: null, status: null, diff: null, message: "" }
+  if (typeof text !== "string" || text.indexOf(LIVE_IGNORED_PREFIX) === 0) return out
+  var data = null
+  try { data = JSON.parse(text) } catch (e) { return out }
+  if (!isObject(data)) return out
+  if (data.method === "notify_status_update") {
+    if (Array.isArray(data.params) && isObject(data.params[0])) { out.kind = "update"; out.diff = data.params[0] }
+    return out
+  }
+  if (data.method === "notify_klippy_ready") { out.kind = "klippyReady"; return out }
+  if (data.method === "notify_klippy_disconnected") { out.kind = "klippyDisconnected"; return out }
+  if (data.method !== undefined) return out
+  var id = finiteOrNull(data.id)
+  if (id === null) return out
+  if (isObject(data.error)) {
+    out.kind = "error"; out.id = id; out.message = stringOr(data.error.message, "")
+  } else if (isObject(data.result) && isObject(data.result.status)) {
+    out.kind = "result"; out.id = id; out.status = data.result.status
+  }
+  return out
+}
+
+// The diff carries only the fields that changed, object by object.
+function mergeStatus(prev, diff) {
+  var out = {}
+  var a = isObject(prev) ? prev : {}
+  var b = isObject(diff) ? diff : {}
+  for (var k in a) out[k] = a[k]
+  for (var d in b) {
+    if (isObject(b[d]) && isObject(a[d])) {
+      var o = copy(a[d])
+      for (var f in b[d]) o[f] = b[d][f]
+      out[d] = o
+    } else {
+      out[d] = b[d]
+    }
+  }
+  return out
+}
+
+function isUrgentDiff(diff) {
+  if (!isObject(diff)) return false
+  return diff.webhooks !== undefined || (isObject(diff.print_stats) && diff.print_stats.state !== undefined)
+}
+
+// ---- Live connection state machine, one entry per printer:
+//      idle → connecting → open → subscribed, waiting between attempts.
+//      Every step returns the new lives and the actions the widget runs
+//      ({ key, type: open | send | ping | close, text }).
+
+var LIVE_PING_MS = 5000
+// 9 s without a frame: with a tick every second, a dead connection is
+// noticed within 10 s.
+var LIVE_DEAD_MS = 9000
+var LIVE_RETRY_MAX_SEC = 30
+
+function emptyLive(url) {
+  return { state: "idle", url: stringOr(url, ""), attempt: 0, retryAt: null, lastFrameAt: null, lastPingAt: null,
+    subscribeId: 0, buffer: null, dirty: false, urgent: false }
+}
+
+function isLives(lives) {
+  return isObject(lives)
+}
+
+// One entry per printer with a usable address; a printer whose address
+// changed gets a new connection.
+function reconcileLives(lives, printers) {
+  var prev = isLives(lives) ? lives : {}
+  var list = Array.isArray(printers) ? printers : []
+  var next = {}
+  var changed = false
+  var count = 0
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i]
+    if (!isObject(p) || p.invalidReason || typeof p.key !== "string") continue
+    var url = liveUrl(p.baseUrl)
+    if (url === "") continue
+    count++
+    if (isObject(prev[p.key]) && prev[p.key].url === url) next[p.key] = prev[p.key]
+    else { next[p.key] = emptyLive(url); changed = true }
+  }
+  var before = 0
+  for (var k in prev) before++
+  return changed || before !== count ? next : prev
+}
+
+function withLive(lives, key, entry) {
+  var next = copy(lives)
+  next[key] = entry
+  return next
+}
+
+function retryDelayMs(attempt) {
+  return Math.min(LIVE_RETRY_MAX_SEC, 2 * Math.pow(2, Math.max(0, attempt))) * 1000
+}
+
+// The connection is gone (closed, failed or given up): wait and try again.
+function closeEntry(e, now) {
+  var n = copy(e)
+  n.state = "waiting"
+  n.retryAt = finiteOrNull(now) + retryDelayMs(e.attempt)
+  n.attempt = e.attempt + 1
+  n.buffer = null
+  n.dirty = false
+  n.urgent = false
+  return n
+}
+
+// Returns { lives, actions, left }: opens what is due, pings open
+// connections every 5 s (one waiting for Klipper too, so its pongs keep it
+// alive) and gives up on any that sent nothing for 9 s.
+function liveTick(lives, now) {
+  var out = { lives: lives, actions: [], left: [] }
+  var t = finiteOrNull(now)
+  if (!isLives(lives) || t === null) return out
+  var next = null
+  for (var key in lives) {
+    var e = lives[key]
+    if (!isObject(e)) continue
+    var n = null
+    if (e.state === "idle" || (e.state === "waiting" && finiteOrNull(e.retryAt) !== null && t >= e.retryAt)) {
+      n = copy(e)
+      n.state = "connecting"
+      n.lastFrameAt = t
+      out.actions.push({ key: key, type: "open", text: "" })
+    } else if (e.state === "connecting" || e.state === "open" || e.state === "subscribed") {
+      if (t - (finiteOrNull(e.lastFrameAt) || 0) >= LIVE_DEAD_MS) {
+        n = closeEntry(e, t)
+        out.actions.push({ key: key, type: "close", text: "" })
+        if (e.state === "subscribed") out.left.push(key)
+      } else if (e.state !== "connecting" && t - (finiteOrNull(e.lastPingAt) || 0) >= LIVE_PING_MS) {
+        n = copy(e)
+        n.lastPingAt = t
+        out.actions.push({ key: key, type: "ping", text: "" })
+      }
+    }
+    if (n) {
+      if (!next) next = copy(lives)
+      next[key] = n
+    }
+  }
+  if (next) out.lives = next
+  return out
+}
+
+function liveOpened(lives, key, now) {
+  var out = { lives: lives, actions: [] }
+  if (!isLives(lives) || !isObject(lives[key]) || lives[key].state !== "connecting") return out
+  var n = copy(lives[key])
+  n.state = "open"
+  n.subscribeId = (finiteOrNull(n.subscribeId) || 0) + 1
+  n.lastFrameAt = finiteOrNull(now)
+  n.lastPingAt = finiteOrNull(now)
+  out.lives = withLive(lives, key, n)
+  out.actions.push({ key: key, type: "send", text: buildSubscribeMessage(n.subscribeId) })
+  return out
+}
+
+// parsed comes from parseLiveMessage. Returns { lives, actions, entered,
+// left }: entered when the printer just became live, left when it stopped.
+function liveMessage(lives, key, parsed, now) {
+  var out = { lives: lives, actions: [], entered: false, left: false }
+  if (!isLives(lives) || !isObject(lives[key]) || !isObject(parsed)) return out
+  var e = lives[key]
+  if (e.state !== "open" && e.state !== "subscribed") return out
+  var n = copy(e)
+  n.lastFrameAt = finiteOrNull(now)
+  var k = parsed.kind
+  if ((k === "result" || k === "error") && parsed.id === e.subscribeId) {
+    if (k === "result" && isObject(parsed.status)) {
+      n.state = "subscribed"
+      n.buffer = parsed.status
+      n.dirty = true
+      n.urgent = true
+      n.attempt = 0
+      n.lastPingAt = finiteOrNull(now)
+      out.entered = e.state !== "subscribed"
+    } else {
+      n.state = "open"
+      n.buffer = null
+      n.dirty = false
+      n.urgent = false
+      out.left = e.state === "subscribed"
+    }
+  } else if (k === "update" && e.state === "subscribed") {
+    n.buffer = mergeStatus(e.buffer, parsed.diff)
+    n.dirty = true
+    n.urgent = e.urgent || isUrgentDiff(parsed.diff)
+  } else if (k === "klippyDisconnected" && e.state === "subscribed") {
+    n.state = "open"
+    n.buffer = null
+    n.dirty = false
+    n.urgent = false
+    out.left = true
+  } else if (k === "klippyReady") {
+    n.subscribeId = (finiteOrNull(e.subscribeId) || 0) + 1
+    out.actions.push({ key: key, type: "send", text: buildSubscribeMessage(n.subscribeId) })
+  }
+  out.lives = withLive(lives, key, n)
+  return out
+}
+
+function livePong(lives, key, now) {
+  if (!isLives(lives) || !isObject(lives[key])) return { lives: lives }
+  var n = copy(lives[key])
+  n.lastFrameAt = finiteOrNull(now)
+  return { lives: withLive(lives, key, n) }
+}
+
+function liveClosed(lives, key, now) {
+  var out = { lives: lives, left: false }
+  if (!isLives(lives) || !isObject(lives[key]) || finiteOrNull(now) === null) return out
+  var e = lives[key]
+  if (e.state === "idle" || e.state === "waiting") return out
+  out.left = e.state === "subscribed"
+  out.lives = withLive(lives, key, closeEntry(e, now))
+  return out
+}
+
+// Hands the buffered status over as a reading: at once when a state changed
+// (urgent), otherwise only when forced (the 1 s timer).
+function liveFlush(lives, key, force) {
+  var out = { lives: lives, reading: null }
+  if (!isLives(lives) || !isObject(lives[key])) return out
+  var e = lives[key]
+  if (e.state !== "subscribed" || !e.dirty || !(e.urgent || force === true)) return out
+  var n = copy(e)
+  n.dirty = false
+  n.urgent = false
+  out.lives = withLive(lives, key, n)
+  out.reading = readingFromStatus(e.buffer)
+  return out
+}
+
+// A live reading: no pending/seq (nothing was asked); requestedAt is when it
+// arrived, so a panel action's protection ends with the first update after
+// the command answered, as it does with the first query.
+function acceptLive(statuses, key, reading, now) {
+  if (!isObject(statuses) || !isObject(statuses[key]) || !isObject(reading)) return statuses
+  var next = copy(statuses)
+  var applied = applyReading(statuses[key], reading, now)
+  applied.live = true
+  applied.requestedAt = finiteOrNull(now)
+  next[key] = applied
+  return next
+}
+
+function leaveLive(statuses, key) {
+  if (!isObject(statuses) || !isObject(statuses[key]) || statuses[key].live !== true) return statuses
+  var next = copy(statuses)
+  var st = copy(statuses[key])
+  st.live = false
+  next[key] = st
+  return next
+}
+
+// After a printer command: a live printer shows the effect through the
+// connection; otherwise ask again as before.
+function afterCommand(statuses, key) {
+  if (isObject(statuses) && isObject(statuses[key]) && statuses[key].live === true)
+    return { statuses: statuses, dispatch: false }
+  return { statuses: requestFollowUp(statuses, key), dispatch: true }
+}
+
+function liveWarning(unavailable) {
+  return unavailable === true ? fill(TEXT.liveUnavailable, TEXT.liveInstall) : ""
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     PRINTER_GLYPH: PRINTER_GLYPH,
@@ -2319,6 +2634,24 @@ if (typeof module !== "undefined") {
     setupCursorStops: setupCursorStops,
     DISCOVERY_TIMEOUT_MS: DISCOVERY_TIMEOUT_MS,
     SAVE_TIMEOUT_MS: SAVE_TIMEOUT_MS,
+    readingFromStatus: readingFromStatus,
+    liveUrl: liveUrl,
+    buildSubscribeMessage: buildSubscribeMessage,
+    parseLiveMessage: parseLiveMessage,
+    mergeStatus: mergeStatus,
+    isUrgentDiff: isUrgentDiff,
+    emptyLive: emptyLive,
+    reconcileLives: reconcileLives,
+    liveTick: liveTick,
+    liveOpened: liveOpened,
+    liveMessage: liveMessage,
+    livePong: livePong,
+    liveClosed: liveClosed,
+    liveFlush: liveFlush,
+    acceptLive: acceptLive,
+    leaveLive: leaveLive,
+    afterCommand: afterCommand,
+    liveWarning: liveWarning,
     stepCursor: stepCursor
   }
 }
