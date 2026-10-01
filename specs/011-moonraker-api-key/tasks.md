@@ -125,9 +125,9 @@ again → adicionada; Set API key errada → "API key rejected"; certa → ok; R
 - [X] T018 [P] Em `manifest.json`, `version` de `0.10.0` para `0.11.0`
 - [X] T019 [P] Auditorias: Princípio VIII (nenhuma cor/tamanho fixo novo), I (nenhum symlink, manifesto válido) e III (nenhum binário novo; nenhuma escrita de arquivo; `grep` de `apiKey` em `console.`/`args` sem ocorrências fora do `stdin`)
 - [X] T020 Sem regressão nas impressoras reais (quickstart §4): Voron e Biqu sem chave seguem `live`, consultas como na 010, um comando pelo usuário se ele quiser; e, **se o usuário quiser** (quickstart §3), o teste numa impressora real com o computador tirado dos `trusted_clients` por ele e a chave informada por ele
-- [ ] T021 Ciclo de vida: clique e Escape (fora e dentro do campo da chave) pelo usuário; summon/hide, disable/enable (restaurar o `shell.json` do backup), reinício do shell; `remove`/reinstalar depois do push (o usuário roda o `remove`), com cópia da pasta e `.specify/feature.json` restaurado
-- [ ] T022 Registrar em `specs/011-moonraker-api-key/hardware-test.md` (Princípio VII): servidor falso (cenários e varredura de processos), regressão nas impressoras reais, teste real se houver, versões
-- [ ] T023 Marcar a fatia como concluída no `spec.md` só depois de T021 (com remove/reinstalar) e T022
+- [X] T021 Ciclo de vida: clique e Escape (fora e dentro do campo da chave) pelo usuário; summon/hide, disable/enable (restaurar o `shell.json` do backup), reinício do shell; `remove`/reinstalar depois do push (o usuário roda o `remove`), com cópia da pasta e `.specify/feature.json` restaurado
+- [X] T022 Registrar em `specs/011-moonraker-api-key/hardware-test.md` (Princípio VII): servidor falso (cenários e varredura de processos), regressão nas impressoras reais, teste real se houver, versões
+- [X] T023 Marcar a fatia como concluída no `spec.md` só depois de T021 (com remove/reinstalar) e T022
 
 ---
 

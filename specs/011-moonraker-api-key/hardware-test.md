@@ -65,5 +65,10 @@ Clique pelo usuário em todo o teste da US3; Escape dentro do campo da chave dev
 sem fechá-lo, e fora do campo fechou o painel. `summon` (`ok`, painel nos dois monitores) e `hide`;
 `disable`: entrada fora do `shell.json`, conexões de 4 para **0**, nenhum `curl` sobrando; `enable`:
 entrada sem impressoras, nenhuma conexão; `shell.json` restaurado do backup (idêntico): 4 conexões de
-volta sem reiniciar; `omarchy-restart-shell`: 4 conexões, nenhum erro no log. `remove`/reinstalar:
-pendente, depois do push.
+volta sem reiniciar; `omarchy-restart-shell`: 4 conexões, nenhum erro no log.
+
+Remover (2026-10-01, depois do push de `3be11ac`, com cópia da pasta no scratchpad): `omarchy plugin
+remove --yes` (rodado pelo usuário) apagou a pasta e a entrada no `shell.json`; 0 conexões e nenhum
+`curl` sobrando. Reinstalado do GitHub (`3be11ac`, conteúdo igual ao da cópia), `.specify/feature.json`
+restaurado, `shell.json` restaurado do backup, shell reiniciado: 4 conexões (dois monitores), nenhum
+erro no log.

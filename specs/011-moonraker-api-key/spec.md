@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Draft
+**Status**: Concluída em 2026-10-01 (chave testada contra servidores falsos HTTP e WebSocket que a exigem e pelo painel; nenhuma linha de comando com a chave; impressoras reais sem chave sem regressão; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "suporte à chave de API do Moonraker, para impressoras que não liberam este computador em trusted_clients: hoje elas aparecem como \"unauthorized — allow this computer in trusted_clients\" e o plugin não consegue ler o status nem mandar comandos. Com a chave cadastrada para a impressora, o status (consulta periódica e conexão contínua da fatia 010) e os comandos do painel passam a funcionar. A chave dá acesso total à impressora, então não pode aparecer na linha de comando dos processos (visível a outros usuários) nem no painel por inteiro; fica na configuração do widget no shell.json (inline, Princípio I), que é legível por outros usuários do computador (644) — registrar esse risco. Decidir na spec/clarify onde o usuário informa a chave (só no shell.json, ou também pelo painel ao adicionar por endereço e para a impressora selecionada)."
 
