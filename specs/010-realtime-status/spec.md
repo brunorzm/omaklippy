@@ -87,7 +87,7 @@ tempo real sozinho quando ela volta.
 1. **Given** uma impressora desligada quando o shell inicia, **When** o painel é aberto, **Then**
    ela aparece como offline com o motivo, como hoje.
 2. **Given** a conexão contínua de pé, **When** ela cai (impressora desligada, Moonraker
-   reiniciado, rede caiu, computador voltou da suspensão), **Then** em até 15 s o widget percebe e
+   reiniciado, rede caiu, computador voltou da suspensão), **Then** em até 10 s o widget percebe e
    passa a usar a consulta periódica, e o status mostrado segue certo (offline, se a impressora
    não responde).
 3. **Given** a impressora voltou a responder, **When** a conexão contínua for possível de novo,
@@ -133,7 +133,7 @@ efeito hoje (com a consulta extra).
   Klipper some e volta; a conexão continua, o painel mostra os estados de hoje (startup, erro,
   desconectado) e, quando o Klipper volta, o status volta a chegar sem reconectar à mão.
 - **Conexão silenciosamente morta** (suspensão do computador, roteador reiniciado): sem aviso de
-  fechamento, o widget percebe pela falta de resposta em até 15 s.
+  fechamento, o widget percebe pela falta de resposta em até 10 s.
 - **Duas barras** (dois monitores): cada uma tem a sua conexão; as duas mostram o mesmo estado e as
   notificações não saem em dobro (líder da fatia 004).
 - **Impressora adicionada ou removida** (fatia 009) com o shell rodando: a conexão dela abre ou
@@ -162,7 +162,8 @@ efeito hoje (com a consulta extra).
   camada, tempo de término).
 - **FR-004**: Sem conexão contínua possível (componente ausente, recusada, falhou ou caiu), o
   widget MUST usar a consulta periódica de hoje, com o mesmo intervalo, tempo limite e mensagens.
-- **FR-005**: Uma conexão que cai ou para de responder MUST ser percebida em até 15 s.
+- **FR-005**: Uma conexão que cai ou para de responder MUST ser percebida em até 10 s, e a
+  impressora MUST voltar à consulta periódica na hora.
 - **FR-006**: O widget MUST tentar reconectar sozinho, com espera crescente entre tentativas e
   no máximo 30 s entre elas, e MUST voltar ao tempo real assim que conseguir.
 - **FR-007**: Os comandos do painel MUST continuar sendo enviados pelo caminho de hoje,
@@ -172,8 +173,9 @@ efeito hoje (com a consulta extra).
 - **FR-009**: As notificações (fatia 004), a proteção de ações do painel, a oferta de "Restart
   firmware" (007) e de "Restart Klipper" depois de 15 s com o Klipper desconectado (008) MUST se
   comportar como hoje.
-- **FR-010**: "Printer not responding" (004) MUST sair depois do mesmo tempo sem resposta de hoje
-  (cerca de 3 intervalos), conte o widget por conexão contínua ou por consulta periódica.
+- **FR-010**: "Printer not responding" (004) MUST continuar saindo depois de 3 consultas periódicas
+  sem resposta, como hoje; com a conexão contínua de pé, MAY sair até 10 s mais tarde (o tempo de
+  perceber a queda, FR-005).
 - **FR-011**: Com a conexão contínua de pé, a linha de atualização no pé do painel MUST dizer `live`
   no lugar de "updated … ago"; com a consulta periódica, MUST continuar mostrando "updated … ago" e
   "no response for …" como hoje. O ícone da barra MUST NOT ganhar indicação nova.
@@ -206,7 +208,7 @@ efeito hoje (com a consulta extra).
 - **SC-002**: Com as duas impressoras ligadas, ociosas e conectadas, o widget faz 0 consultas
   periódicas de status por minuto (hoje, 24 por barra: 12 por impressora).
 - **SC-003**: Em 100% dos testes de queda (Moonraker reiniciado, impressora desligada), o painel
-  continua mostrando o estado certo, percebe a queda em até 15 s e volta ao tempo real em até 30 s
+  continua mostrando o estado certo, percebe a queda em até 10 s e volta ao tempo real em até 30 s
   depois de a impressora voltar, sem ação do usuário.
 - **SC-004**: Sem o componente da conexão contínua, o plugin se comporta como antes da fatia em
   todos os cenários das fatias 001–009.

@@ -1,0 +1,1 @@
+{"message": "{\"jsonrpc\":\"2.0\",\"method\":\"notify_status_update\",\"params\":[{\"print_stats\":{\"state\":\"paused\",\"print_duration\":812.4},\"virtual_sdcard\":{\"progress\":0.4213},\"extruder\":{\"target\":215.0}},28300.5]}"}

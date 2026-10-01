@@ -1,0 +1,1 @@
+{"message": "{\"jsonrpc\":\"2.0\",\"method\":\"notify_status_update\",\"params\":[{\"extruder\":{\"temperature\":32.61},\"heater_bed\":{\"temperature\":32.22}},28318.177005991]}"}

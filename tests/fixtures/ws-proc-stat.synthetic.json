@@ -1,0 +1,1 @@
+{"message": "{\"jsonrpc\":\"2.0\",\"method\":\"notify_proc_stat_update\",\"params\":[{\"moonraker_stats\":{\"time\":1790876516.4,\"cpu_usage\":4.14,\"memory\":74624,\"mem_units\":\"kB\"},\"cpu_temp\":57.9}]}"}
