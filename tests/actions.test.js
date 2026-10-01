@@ -31,7 +31,7 @@ test("ACTIONS table: paths, confirmation and slots", () => {
   assert.equal(M.ACTIONS.resume.path, "/printer/print/resume")
   assert.equal(M.ACTIONS.cancel.path, "/printer/print/cancel")
   assert.equal(M.ACTIONS.emergencyStop.path, "/printer/emergency_stop")
-  assert.deepEqual(Object.keys(M.ACTIONS).filter(k => M.ACTIONS[k].confirm).sort(), ["cancel", "emergencyStop", "firmwareRestart"])
+  assert.deepEqual(Object.keys(M.ACTIONS).filter(k => M.ACTIONS[k].confirm).sort(), ["cancel", "emergencyStop", "firmwareRestart", "klipperRestart"])
   assert.deepEqual(Object.keys(M.ACTIONS).filter(k => M.ACTIONS[k].slot === "estop"), ["emergencyStop"])
   assert.equal(M.COMMAND_TIMEOUT_SEC, 60)
 })

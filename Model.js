@@ -43,7 +43,8 @@ var TEXT = {
     days: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   },
-  actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop", openWebUi: "Open web UI", firmwareRestart: "Restart firmware" },
+  actions: { pause: "Pause", resume: "Resume", cancel: "Cancel", emergencyStop: "Emergency stop", openWebUi: "Open web UI", firmwareRestart: "Restart firmware",
+    klipperRestart: "Restart Klipper" },
   confirm: {
     back: "Back",
     cancelPrint: "Cancel print",
@@ -52,7 +53,8 @@ var TEXT = {
     cancelMessageNoFile: "Cancel the current print on %1?",
     emergencyMessage: "Emergency stop %1? Klipper will shut down until a firmware restart.",
     restart: "Restart",
-    restartMessage: "Restart the firmware on %1? Klipper and the printer's boards will restart."
+    restartMessage: "Restart the firmware on %1? Klipper and the printer's boards will restart.",
+    klipperMessage: "Restart the Klipper service on %1? It will start again on the printer's computer."
   },
   actionFailed: "%1 failed: %2",
   left: "%1 left",
@@ -99,8 +101,13 @@ var ACTIONS = {
   resume: { path: "/printer/print/resume", confirm: false, slot: "busy" },
   cancel: { path: "/printer/print/cancel", confirm: true, slot: "busy" },
   emergencyStop: { path: "/printer/emergency_stop", confirm: true, slot: "estop" },
-  firmwareRestart: { path: "/printer/firmware_restart", confirm: true, slot: "busy" }
+  firmwareRestart: { path: "/printer/firmware_restart", confirm: true, slot: "busy" },
+  klipperRestart: { path: "/machine/services/restart", confirm: true, slot: "busy" }
 }
+
+// The Klipper service's name when the printer does not tell (Moonraker's
+// default for a single install).
+var DEFAULT_KLIPPER_SERVICE = "klipper"
 
 // Nerd Font glyphs from the bar's icon font.
 var ACTION_GLYPHS = {
@@ -110,12 +117,18 @@ var ACTION_GLYPHS = {
   emergencyStop: "\u{f0028}",  // nf-md-alert_octagon
   busy: "\u{f0772}",           // nf-md-loading
   openWebUi: "\u{f03cc}",      // nf-md-open_in_new
-  firmwareRestart: "\u{f0709}" // nf-md-restart
+  firmwareRestart: "\u{f0709}", // nf-md-restart
+  klipperRestart: "\u{f0450}"   // nf-md-reload
 }
 
 // Macros behind pause/resume/cancel can park, wait for moves and reheat, so
 // commands get far more time than a status query (whose maximum is 30 s).
 var COMMAND_TIMEOUT_SEC = 60
+
+// Moonraker answers 503 while Klipper is not connected to it. A firmware
+// restart passes through that for a couple of seconds (2 s on the Voron), so
+// the Klipper service restart is offered only once it lasts this long.
+var KLIPPY_DOWN_OFFER_MS = 15000
 
 // Opening the web UI: the launcher answers in well under a second (research
 // R1); a hung one is given up on after this long.
@@ -374,11 +387,67 @@ function isAction(action) {
   return typeof action === "string" && ACTIONS.hasOwnProperty(action)
 }
 
-function buildActionArgs(baseUrl, action, connectTimeoutSec) {
+// service is only read by klipperRestart: the systemd unit to restart, sent
+// as a query argument (Moonraker reads those on POST too).
+function buildActionArgs(baseUrl, action, connectTimeoutSec, service) {
   if (typeof baseUrl !== "string" || baseUrl === "" || !isAction(action)) return []
   var c = Math.max(1, Math.ceil(finiteOrNull(connectTimeoutSec) || DEFAULT_TIMEOUT_SEC))
+  var url = baseUrl + ACTIONS[action].path
+  if (action === "klipperRestart")
+    url += "?service=" + encodeURIComponent(stringOr(service, "") || DEFAULT_KLIPPER_SERVICE)
   return ["curl", "-sS", "-X", "POST", "--connect-timeout", String(c), "--max-time", String(COMMAND_TIMEOUT_SEC),
-    "-H", "Accept: application/json", "-w", "\n%{http_code}", baseUrl + ACTIONS[action].path]
+    "-H", "Accept: application/json", "-w", "\n%{http_code}", url]
+}
+
+// ---- Klipper service name: GET /machine/system_info once per disconnection.
+
+function buildServiceInfoArgs(baseUrl, timeoutSec) {
+  if (typeof baseUrl !== "string" || baseUrl === "") return []
+  return buildCurlArgs(baseUrl + "/machine/system_info", timeoutSec)
+}
+
+// instance_ids.klipper (klipper-1 and so on when several instances are
+// installed), or null when the printer did not tell.
+function parseServiceInfo(stdout, exitCode) {
+  var t = readTransport(stdout, exitCode)
+  if (t.errorMessage || t.httpStatus < 200 || t.httpStatus >= 300) return null
+  var res = isObject(t.data) && isObject(t.data.result) ? t.data.result : null
+  var info = res && isObject(res.system_info) ? res.system_info : null
+  var ids = info && isObject(info.instance_ids) ? info.instance_ids : null
+  return ids ? stringOr(ids.klipper, "") || null : null
+}
+
+// Returns { statuses, requests }: one lookup for each printer whose Klipper is
+// disconnected and whose service name is not known or being asked yet.
+function planServiceInfo(statuses, printers, timeoutMs) {
+  var list = Array.isArray(printers) ? printers : []
+  var src = isObject(statuses) ? statuses : {}
+  var timeoutSec = Math.max(1, Math.ceil((finiteOrNull(timeoutMs) || DEFAULT_TIMEOUT_SEC * 1000) / 1000))
+  var next = null
+  var requests = []
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i]
+    if (!isObject(p) || p.invalidReason || !p.baseUrl) continue
+    var st = src[p.key]
+    if (!isObject(st) || finiteOrNull(st.klippyDownSince) === null || st.klipperService) continue
+    if (!next) next = copy(src)
+    var updated = copy(st)
+    updated.klipperService = { name: null, pending: true, seq: 1 }
+    next[p.key] = updated
+    requests.push({ key: p.key, seq: 1, args: buildServiceInfoArgs(p.baseUrl, timeoutSec) })
+  }
+  return { statuses: next || statuses, requests: requests }
+}
+
+function acceptServiceInfo(statuses, key, seq, name) {
+  if (!isObject(statuses) || !isObject(statuses[key])) return statuses
+  var svc = statuses[key].klipperService
+  if (!isObject(svc) || svc.pending !== true || svc.seq !== seq) return statuses
+  var next = copy(statuses)
+  var st = copy(statuses[key])
+  st.klipperService = { name: stringOr(name, "") || null, pending: false, seq: seq }
+  next[key] = st
+  return next
 }
 
 // ---- Response
@@ -610,7 +679,9 @@ function initialStatus(key) {
     printDuration: null,
     estimate: null,
     currentLayer: null,
-    totalLayer: null
+    totalLayer: null,
+    klippyDownSince: null,
+    klipperService: null
   }
 }
 
@@ -634,6 +705,8 @@ function applyReading(prev, reading, now) {
     base.printDuration = null
     base.currentLayer = null
     base.totalLayer = null
+    base.klippyDownSince = null
+    forgetFailedService(base)
     base.offlineSince = base.state === "offline" && isObject(prev) && prev.state === "offline" && prev.offlineSince !== null && prev.offlineSince !== undefined
       ? prev.offlineSince : now
     return base
@@ -654,8 +727,31 @@ function applyReading(prev, reading, now) {
   // file changes, so the next print fetches it again.
   if (!hasJob(d.state) || !isObject(base.estimate) || base.estimate.filename !== base.filename) base.estimate = null
   base.offlineSince = null
+  if (r.httpStatus === 503) {
+    var since = isObject(prev) ? finiteOrNull(prev.klippyDownSince) : null
+    base.klippyDownSince = since !== null ? since : now
+  } else {
+    base.klippyDownSince = null
+    forgetFailedService(base)
+  }
   if (r.httpStatus > 0) base.lastSeenAt = now
   return base
+}
+
+// A service name lookup that failed is tried again on the next disconnection;
+// a known name stays for the session (it does not change).
+function forgetFailedService(status) {
+  var svc = status.klipperService
+  if (isObject(svc) && svc.pending !== true && !svc.name) status.klipperService = null
+}
+
+function clearKlippyDown(statuses, key) {
+  if (!isObject(statuses) || !isObject(statuses[key]) || statuses[key].klippyDownSince === null) return statuses
+  var next = copy(statuses)
+  var st = copy(statuses[key])
+  st.klippyDownSince = null
+  next[key] = st
+  return next
 }
 
 // ---- Polling engine: every state decision the widget makes about its
@@ -751,12 +847,22 @@ function canRestartFirmware(status) {
   return status.klippyState === "shutdown" || status.klippyState === "error"
 }
 
+// Klipper not connected to Moonraker (503) for KLIPPY_DOWN_OFFER_MS or more:
+// only its service restart can help. Without a clock (now) it is never offered.
+function canRestartKlipper(status, now) {
+  if (!isObject(status) || status.state !== "error") return false
+  var since = finiteOrNull(status.klippyDownSince)
+  var t = finiteOrNull(now)
+  return since !== null && t !== null && t - since >= KLIPPY_DOWN_OFFER_MS
+}
+
 // The actions a printer offers now: the per-state table plus the firmware
-// restart, which depends on Klipper's own state as well.
-function actionsFor(status) {
+// and service restarts, which depend on Klipper's own state as well.
+function actionsFor(status, now) {
   if (!isObject(status)) return []
   var ids = availableActions(status.state)
   if (canRestartFirmware(status)) ids.push("firmwareRestart")
+  if (canRestartKlipper(status, now)) ids.push("klipperRestart")
   return ids
 }
 
@@ -775,7 +881,7 @@ function planCommand(commands, printer, status, action, timeoutMs, now) {
   var refused = { commands: commands, request: null }
   if (!isObject(printer) || typeof printer.key !== "string" || printer.invalidReason || !printer.baseUrl) return refused
   if (!isAction(action)) return refused
-  if (actionsFor(status).indexOf(action) < 0) return refused
+  if (actionsFor(status, now).indexOf(action) < 0) return refused
   var cur = commandsFor(commands, printer.key)
   var slot = ACTIONS[action].slot
   if (cur.estop) return refused
@@ -794,7 +900,8 @@ function planCommand(commands, printer, status, action, timeoutMs, now) {
       key: printer.key,
       seq: entry.seq,
       action: action,
-      args: buildActionArgs(printer.baseUrl, action, connectSec),
+      args: buildActionArgs(printer.baseUrl, action, connectSec,
+        isObject(status.klipperService) ? status.klipperService.name : ""),
       guardMs: (COMMAND_TIMEOUT_SEC + 1) * 1000
     }
   }
@@ -1042,6 +1149,31 @@ function isLeader(reg, id) {
 //      with a query that left after the answer: each bar polls on its own
 //      clock, so one bar reading late must not free another's older query.
 
+// ---- One send per command across bars: every bar keeps its own commands,
+//      so the shared registry (Shared.state.sends) stops a second bar from
+//      sending the same command to the same printer right after the first.
+
+var SEND_DEDUP_MS = 5000
+
+function claimSend(sends, key, action, now) {
+  var src = isObject(sends) ? sends : {}
+  var t = finiteOrNull(now)
+  var last = src[key]
+  if (t !== null && isObject(last) && last.action === action && t - last.at < SEND_DEDUP_MS)
+    return { sends: sends, ok: false }
+  var next = copy(src)
+  next[key] = { action: action, at: t !== null ? t : 0 }
+  return { sends: next, ok: true }
+}
+
+// A failed command may be retried at once.
+function releaseSend(sends, key, action) {
+  if (!isObject(sends) || !isObject(sends[key]) || sends[key].action !== action) return sends
+  var next = copy(sends)
+  delete next[key]
+  return next
+}
+
 function protectStart(prot, key) {
   var next = copy(isObject(prot) ? prot : {})
   var cur = isObject(next[key]) ? next[key] : { pending: 0, answeredAt: null }
@@ -1262,13 +1394,14 @@ function detailFor(printer, status, now) {
 // planOpenWeb) would send it now"; failureText shows even when no button does
 // (a printer that went offline after the failure). Open web UI shows in every
 // state as long as the printer has a web address, always last.
-function buildActionsModel(printer, status, printerCommands) {
+function buildActionsModel(printer, status, printerCommands, now) {
   var model = { buttons: [], primary: [], emergency: null, web: null, failureText: "", filename: "" }
   if (!isObject(printer) || !isObject(status)) return model
   var pc = isObject(printerCommands) ? printerCommands : emptyCommands()
   var wrapped = {}
   wrapped[printer.key] = pc
-  var ids = actionsFor(status)
+  var t = finiteOrNull(now)
+  var ids = actionsFor(status, t === null ? undefined : t)
   for (var i = 0; i < ids.length; i++) {
     var id = ids[i]
     var running = (isObject(pc.busy) && pc.busy.action === id) || (isObject(pc.estop) && pc.estop.action === id)
@@ -1279,7 +1412,7 @@ function buildActionsModel(printer, status, printerCommands) {
       confirm: ACTIONS[id].confirm,
       urgent: id === "emergencyStop",
       busy: running,
-      enabled: planCommand(wrapped, printer, status, id, DEFAULT_TIMEOUT_SEC * 1000, 0).request !== null
+      enabled: planCommand(wrapped, printer, status, id, DEFAULT_TIMEOUT_SEC * 1000, t === null ? 0 : t).request !== null
     }
     model.buttons.push(button)
     if (id === "emergencyStop") model.emergency = button
@@ -1318,13 +1451,14 @@ function confirmMessage(action, displayName, filename) {
     return file !== "" ? fill(TEXT.confirm.cancelMessage, file, name) : fill(TEXT.confirm.cancelMessageNoFile, name)
   if (action === "emergencyStop") return fill(TEXT.confirm.emergencyMessage, name)
   if (action === "firmwareRestart") return fill(TEXT.confirm.restartMessage, name)
+  if (action === "klipperRestart") return fill(TEXT.confirm.klipperMessage, name)
   return ""
 }
 
 function confirmLabel(action) {
   if (action === "cancel") return TEXT.confirm.cancelPrint
   if (action === "emergencyStop") return TEXT.confirm.stop
-  if (action === "firmwareRestart") return TEXT.confirm.restart
+  if (action === "firmwareRestart" || action === "klipperRestart") return TEXT.confirm.restart
   return ""
 }
 
@@ -1383,7 +1517,7 @@ function buildPanelModel(printers, statusesByKey, selectedKey, now, commandsByKe
   for (var k = 0; k < rows.length; k++) options.push({ value: rows[k].key, label: rows[k].optionLabel })
   var commands = isObject(commandsByKey) ? commandsByKey[printer.key] : null
   return { empty: false, selected: selected, showJob: hasJob(selected.state), rows: rows, options: options,
-    actions: buildActionsModel(printer, selectedStatus, commands), notifyWarning: warning }
+    actions: buildActionsModel(printer, selectedStatus, commands, now), notifyWarning: warning }
 }
 
 if (typeof module !== "undefined") {
@@ -1451,6 +1585,16 @@ if (typeof module !== "undefined") {
     setupCommand: setupCommand,
     tidyMessage: tidyMessage,
     availableActions: availableActions,
+    KLIPPY_DOWN_OFFER_MS: KLIPPY_DOWN_OFFER_MS,
+    clearKlippyDown: clearKlippyDown,
+    SEND_DEDUP_MS: SEND_DEDUP_MS,
+    claimSend: claimSend,
+    releaseSend: releaseSend,
+    canRestartKlipper: canRestartKlipper,
+    buildServiceInfoArgs: buildServiceInfoArgs,
+    parseServiceInfo: parseServiceInfo,
+    planServiceInfo: planServiceInfo,
+    acceptServiceInfo: acceptServiceInfo,
     canRestartFirmware: canRestartFirmware,
     actionsFor: actionsFor,
     buildActionArgs: buildActionArgs,

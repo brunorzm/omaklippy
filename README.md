@@ -37,8 +37,18 @@ status of your Klipper 3D printers in the bar, by polling the Moonraker API on y
     config error, after a confirmation. The panel then follows the restart ("Klippy
     Disconnected", "Printer is not ready…", then idle) on its own; if the fault is still there,
     the printer goes back to "error" and the button comes back. It does not show while Klipper
-    is starting, when the Klipper service is disconnected from Moonraker (that needs the service
-    restarted on the printer's computer) or when only the print failed.
+    is starting, when the Klipper service is disconnected from Moonraker (see below) or when only
+    the print failed.
+  - **Restart Klipper** when the printer answers but its Klipper service has been disconnected
+    from Moonraker for 15 s or more ("Klippy Host not connected": the service stopped, crashed or
+    never started), after a confirmation. It restarts the Klipper service on the printer's
+    computer through Moonraker, using the service name the printer reports (`klipper`, or
+    `klipper-1` and so on with several instances); the service must be in Moonraker's list of
+    allowed services, as it is in a standard install. The 15 s keep the button away from the
+    few seconds every firmware restart spends disconnected. The panel then follows Klipper back
+    on its own; if it stays disconnected, the button comes back 15 s later.
+  - The same command is never sent twice to a printer within 5 s, even from the bars of two
+    monitors; after a failure you can retry at once.
   - Confirmations open with **Back** selected, so Enter alone never confirms; use ←/→ (or Tab)
     and Enter, or click. Escape or a click outside the dialog gives up.
   - While a command runs its button spins and nothing else is sent to that printer (except the
@@ -146,7 +156,8 @@ omarchy bar set io.github.brunorzm.omaklippy timeoutSec 5 --json
 The plugin calls `GET /printer/objects/query` for status, `GET /server/files/metadata` once per
 print for the slicer's estimate and, when you use the panel's buttons,
 `POST /printer/print/pause`, `/printer/print/resume`, `/printer/print/cancel`,
-`/printer/emergency_stop` and `/printer/firmware_restart`, all without authentication. Your computer has to be allowed in
+`/printer/emergency_stop`, `/printer/firmware_restart` and `/machine/services/restart`, and
+`GET /machine/system_info` once when Klipper disconnects (for its service name), all without authentication. Your computer has to be allowed in
 `moonraker.conf` (for status and for commands):
 
 ```ini
@@ -175,7 +186,7 @@ No other external binary is ever run.
 - Creates no files outside its own folder. Settings live on the widget's entry in
   `~/.config/omarchy/shell.json`, written by the shell itself.
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
-  press one of the panel's buttons (Cancel, Emergency stop and Restart firmware only after you confirm).
+  press one of the panel's buttons (Cancel, Emergency stop, Restart firmware and Restart Klipper only after you confirm).
 - Opens your default browser only when you press **Open web UI**.
 - Shows desktop notifications about your prints (each kind can be turned off).
 

@@ -79,6 +79,26 @@ Decisões técnicas da fatia 008. A spec não tem `NEEDS CLARIFICATION`.
   `Restart the Klipper service on Voron? It will start again on the printer's computer.`; botão de
   confirmar `Restart` (o `TEXT.confirm.restart` da 007); falha `Restart Klipper failed: <motivo>`.
 
+## R7. Trava entre barras (FR-013, acrescentado na implementação)
+
+- **Observado**: na primeira confirmação com o Moonraker falso (2026-10-01 06:27:28) saíram dois
+  `POST /machine/services/restart` no mesmo segundo; o usuário clicou uma vez, com um painel aberto.
+  Duas repetições (com e sem resposta lenta, com a mesma sequência Back/Escape) deram um POST cada.
+  Dentro de uma barra, `planCommand` recusa o segundo envio enquanto o primeiro está pendente e o
+  botão some depois do sucesso; a origem que sobra é a outra barra (cada monitor tem a sua, com
+  `commands` próprio). Causa não confirmada.
+- **Decision**: registro compartilhado `Shared.state.sends` (como `protections` da 004) com o último
+  envio por impressora `{ action, at }`. `claimSend(sends, key, action, now)` recusa a mesma ação
+  para a mesma impressora com menos de `SEND_DEDUP_MS = 5000` desde o último envio; aceita ação
+  diferente (Pause e logo Resume). `releaseSend(sends, key, action)` apaga o registro quando o
+  comando falha, para o usuário poder tentar de novo na hora. Vale para todas as ações de
+  impressora (não para Open web UI, que não envia nada à impressora).
+- **Rationale**: barato, puro e testável; cobre a única origem possível sem depender de entender o
+  disparo. Uma confirmação legítima repetida em menos de 5 s depois de um sucesso não tem sentido
+  (a impressora já está reagindo ao primeiro).
+- **Alternatives considered**: só observar (deixaria o risco); mover os comandos para um único
+  lugar compartilhado (reescreve 002–007).
+
 ## R6. Notificações (FR-011)
 
 Nada novo: `runAction` aplica a proteção a qualquer comando. Teste puro: `observe` sobre 503 →

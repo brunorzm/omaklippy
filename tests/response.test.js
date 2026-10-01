@@ -111,6 +111,8 @@ test("initialStatus is offline, waiting for the first answer", () => {
     estimate: null,
     currentLayer: null, // slice 006: the layer, when the printer reports it
     totalLayer: null,
+    klippyDownSince: null, // slice 008: since when Klipper is disconnected (HTTP 503), and its service name
+    klipperService: null,
   })
 })
 

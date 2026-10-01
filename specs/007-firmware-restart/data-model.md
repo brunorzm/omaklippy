@@ -24,6 +24,8 @@ Rótulo `TEXT.actions.firmwareRestart` ("Restart firmware"); glifo `ACTION_GLYPH
 | `error` | `startup`, `ready` (erro de impressão), `""` (503, 401/403, resposta inesperada) | nenhuma |
 | `offline` | `""` | nenhuma |
 
+> **Fatia 008**: com `error` e HTTP 503 contínuo por 15 s ou mais (`klippyState` vazio), a ação `klipperRestart` aparece ([data-model.md da 008](../008-klipper-service-restart/data-model.md#disponibilidade-actionsforstatus-now)); `actionsFor` ganhou o parâmetro `now`.
+
 `availableActions(state)` continua a tabela da 002 só por `state`; `actionsFor` a usa e acrescenta
 `firmwareRestart` quando `canRestartFirmware(status)`.
 

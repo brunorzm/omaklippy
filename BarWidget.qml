@@ -66,6 +66,17 @@ BarWidget {
       var e = est.requests[j]
       estimateComponent.createObject(requestHolder, { key: e.key, seq: e.seq, filename: e.filename, args: e.args, guardMs: config.timeoutMs + 1000 })
     }
+    // The Klipper service's name, once per disconnection (Model.planServiceInfo).
+    var svc = Model.planServiceInfo(statuses, config.printers, config.timeoutMs)
+    statuses = svc.statuses
+    for (var k = 0; k < svc.requests.length; k++) {
+      var s = svc.requests[k]
+      serviceInfoComponent.createObject(requestHolder, { key: s.key, seq: s.seq, args: s.args, guardMs: config.timeoutMs + 1000 })
+    }
+  }
+
+  function acceptServiceInfo(key, seq, name) {
+    statuses = Model.acceptServiceInfo(statuses, key, seq, name)
   }
 
   function acceptEstimate(key, seq, filename, seconds, layerCount) {
@@ -141,20 +152,31 @@ BarWidget {
     var printer = null
     for (var i = 0; i < config.printers.length; i++)
       if (config.printers[i].key === key) printer = config.printers[i]
-    var plan = Model.planCommand(commands, printer, statuses[key], action, config.timeoutMs, Date.now())
-    commands = plan.commands
+    var now = Date.now()
+    var plan = Model.planCommand(commands, printer, statuses[key], action, config.timeoutMs, now)
     var r = plan.request
-    if (r && r.args.length > 0) {
-      // Its effect must not come back as a notification, whichever bar reads it.
-      Shared.state.protections = Model.protectStart(Shared.state.protections, r.key)
-      commandComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: r.guardMs })
-    }
+    if (!r || r.args.length === 0) return
+    // Another bar (another monitor) may have just sent the same command.
+    var claim = Model.claimSend(Shared.state.sends, key, action, now)
+    if (!claim.ok) return
+    Shared.state.sends = claim.sends
+    commands = plan.commands
+    // Its effect must not come back as a notification, whichever bar reads it.
+    Shared.state.protections = Model.protectStart(Shared.state.protections, r.key)
+    commandComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: r.guardMs })
   }
 
   // Success or failure, the printer is asked again right away so the panel
   // shows what the command did without waiting for the next cycle.
   function acceptCommand(key, seq, result) {
     Shared.state.protections = Model.protectFinish(Shared.state.protections, key, Date.now())
+    // A restarted Klipper service passes through 503 again while it starts:
+    // count the disconnection anew so the button does not come straight back.
+    var c = commands[key]
+    var running = c && c.busy && c.busy.seq === seq ? c.busy : (c && c.estop && c.estop.seq === seq ? c.estop : null)
+    if (running && !result.ok) Shared.state.sends = Model.releaseSend(Shared.state.sends, key, running.action)
+    if (result.ok && running && running.action === "klipperRestart")
+      statuses = Model.clearKlippyDown(statuses, key)
     commands = Model.acceptCommandResult(commands, key, seq, result)
     statuses = Model.requestFollowUp(statuses, key)
     dispatch(key)
@@ -436,6 +458,77 @@ BarWidget {
         interval: fetch.guardMs
         running: true
         onTriggered: fetch.complete(null)
+      }
+    }
+  }
+
+  Component {
+    id: serviceInfoComponent
+
+    // One GET /machine/system_info for the Klipper service's name. Same
+    // lifecycle as the metadata fetch: exactly one result.
+    Item {
+      id: info
+      required property string key
+      required property int seq
+      required property var args
+      required property int guardMs
+
+      property bool finished: false
+      property bool launched: false
+      property bool exited: false
+      property bool drained: false
+      property int exitCode: -1
+      property string output: ""
+
+      function complete(name) {
+        if (finished) return
+        finished = true
+        infoGuard.stop()
+        infoProc.running = false
+        root.acceptServiceInfo(key, seq, name)
+        info.destroy()
+      }
+
+      function stop() {
+        finished = true
+        infoGuard.stop()
+        infoProc.running = false
+        info.destroy()
+      }
+
+      function tryComplete() {
+        if (exited && drained) complete(Model.parseServiceInfo(output, exitCode))
+      }
+
+      Process {
+        id: infoProc
+        command: info.args
+        running: true
+        onStarted: info.launched = true
+        onRunningChanged: {
+          if (!running && !info.launched && !info.finished) info.complete(null)
+        }
+        stdout: StdioCollector {
+          waitForEnd: true
+          onStreamFinished: {
+            info.output = String(text || "")
+            info.drained = true
+            info.tryComplete()
+          }
+        }
+        onExited: function(exitCode) {
+          info.exitCode = exitCode
+          info.exited = true
+          info.tryComplete()
+        }
+      }
+
+      Timer {
+        id: infoGuard
+        interval: info.guardMs
+        running: true
+        onTriggered: info.complete(null)
       }
     }
   }

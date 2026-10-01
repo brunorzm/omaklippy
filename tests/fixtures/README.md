@@ -29,6 +29,16 @@ Voron fixtures have `info` empty.
 config error message: Klipper started but refused its config. Like `shutdown`, it is a state the
 slice 007 "Restart firmware" button offers to recover from.
 
+`system-info.synthetic.json` keeps only the fields the plugin reads from `GET /machine/system_info`
+(`instance_ids`, `available_services`, `service_state`), with the values read from the real Voron on
+2026-09-30 (its `provider`, assumed at first, matched the real one). `system-info-instance.synthetic.json` is an install whose
+Klipper service is `klipper-1`, and `system-info-no-klipper.synthetic.json` one where Moonraker
+manages no services (`provider` `none`). `action-service-not-allowed.synthetic.json` is Moonraker
+refusing to restart a service that is not in its allowed list (slice 008).
+`system-info-voron.json` is the real Voron answer (2026-10-01), trimmed the same way. Real `system_info`
+answers are trimmed to these fields before they become fixtures: the rest carries IP addresses and
+serial numbers, and the repository is public.
+
 ## Capture from a real printer
 
 ```bash

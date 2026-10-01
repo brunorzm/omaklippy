@@ -125,6 +125,11 @@ continuando desconectado depois do reinício, ver o botão voltar depois de 15 s
   acionável por mouse e teclado como os demais.
 - **FR-011**: Reiniciar pelo painel MUST NOT gerar notificação.
 - **FR-012**: O ícone da barra MUST continuar sem controles.
+- **FR-013**: Um mesmo comando para a mesma impressora MUST NOT sair duas vezes em 5 s, mesmo a
+  partir de barras diferentes (um monitor = uma barra); depois de uma falha, o usuário pode tentar
+  de novo na hora. Acrescentado na implementação (2026-10-01): na primeira validação com o
+  Moonraker falso saíram dois reinícios de uma confirmação, sem repetição em duas tentativas
+  seguintes; a única origem possível é uma segunda barra.
 
 ### Key Entities
 

@@ -26,6 +26,8 @@ em `actions.primary`.
 | error com Klipper `startup`, 503, erro de impressão, 401/403 | — | — | se houver endereço |
 | offline | — | — | se houver endereço |
 
+> **Fatia 008**: em erro com 503 contínuo por 15 s ou mais, a linha primary mostra "Restart Klipper" ([display.md da 008](../../008-klipper-service-restart/contracts/display.md#posição-no-painel-fr-010)).
+
 ## Botão
 
 O `Button` da linha primary da 002: bordered, fundo transparente (não o fundo de alerta),
