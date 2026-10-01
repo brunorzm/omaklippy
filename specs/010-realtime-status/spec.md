@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Draft
+**Status**: Concluída em 2026-10-01 (Voron e Biqu B1 ao vivo pelo WebSocket, queda e volta do Moonraker e do Klipper, pausa e retomada de uma impressão real pelo painel; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "atualizar o status das impressoras em tempo real pela conexão WebSocket do Moonraker (JSON-RPC, inscrição nos objetos de status), no lugar da consulta HTTP a cada 5 s. Decisões já tomadas pelo usuário: (1) os comandos do painel (pausar, retomar, cancelar, parada de emergência, reiniciar firmware/Klipper) continuam por HTTP, para a parada de emergência nunca depender da conexão; (2) uma conexão por barra (cada instância do widget, uma por monitor, abre a sua), sem conexão compartilhada entre barras; (3) a consulta HTTP periódica continua como alternativa automática quando o WebSocket não está disponível (QtWebSockets ausente, conexão recusada ou caída, até reconectar), com reconexão automática, para o plugin nunca ficar pior do que hoje. O efeito de um comando aparece pela inscrição, sem a consulta extra de hoje."
 

@@ -120,9 +120,9 @@ em ≤2 s, nenhuma notificação, nenhuma consulta extra.
 - [X] T019 [P] Atualizar `README.md`: atualização ao vivo pela conexão contínua (inscrição só de leitura; comandos continuam por HTTP), consulta periódica como alternativa (o que `refreshIntervalSec` passa a valer), `qt6-websockets` na tabela de dependências como opcional com o que a ausência desliga e o aviso, linha nova em Privileges, `live` no painel
 - [X] T020 [P] Em `manifest.json`, `version` de `0.9.0` para `0.10.0`
 - [X] T021 [P] Auditorias: Princípio VIII (nenhuma cor/tamanho fixo novo), I (nenhum symlink, manifesto válido, `LiveConnection.qml` na raiz) e III (nenhum binário novo; a conexão só envia a inscrição e o `ping`; nenhuma escrita de arquivo)
-- [ ] T022 Ciclo de vida ([quickstart §4](./quickstart.md#4-ciclo-de-vida-princípio-vi)): clique e Escape pelo usuário; summon/hide, disable/enable (restaurar o `shell.json` do backup), reinício do shell por comando; depois de `disable` e do reinício, nenhuma conexão do `quickshell` com as impressoras (`ss -tnp`) além das do widget reiniciado; `remove`/reinstalar depois do push (o usuário roda o `remove`), com cópia da pasta e `.specify/feature.json` restaurado
+- [X] T022 Ciclo de vida ([quickstart §4](./quickstart.md#4-ciclo-de-vida-princípio-vi)): clique e Escape pelo usuário; summon/hide, disable/enable (restaurar o `shell.json` do backup), reinício do shell por comando; depois de `disable` e do reinício, nenhuma conexão do `quickshell` com as impressoras (`ss -tnp`) além das do widget reiniciado; `remove`/reinstalar depois do push (o usuário roda o `remove`), com cópia da pasta e `.specify/feature.json` restaurado
 - [X] T023 Registrar em `specs/010-realtime-status/hardware-test.md` (Princípio VII): latência medida, consultas por minuto antes e depois, tempo de queda e de volta, Klipper parado, versões (Moonraker v0.11.0 na Voron, v0.10.0 na Biqu)
-- [ ] T024 Marcar a fatia como concluída no `spec.md` só depois de T022 (com remove/reinstalar) e T023
+- [X] T024 Marcar a fatia como concluída no `spec.md` só depois de T022 (com remove/reinstalar) e T023
 
 ---
 

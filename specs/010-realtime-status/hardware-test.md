@@ -84,4 +84,10 @@ Clique pelo usuário (Pause, Resume, Restart Klipper e a seleção de impressora
 conexões do `quickshell` com as impressoras caíram de 2 para **0**, sem `curl` sobrando; `enable`:
 entrada recriada sem impressoras, nenhuma conexão; `shell.json` restaurado do backup (idêntico): as
 2 conexões voltaram sozinhas, sem reiniciar o shell; `omarchy-restart-shell`: 2 conexões de novo e
-nenhum erro no log. `remove`/reinstalar: pendente, depois do push.
+nenhum erro no log. Escape pelo usuário: fechou o painel normalmente.
+
+Remover (2026-10-01, depois do push de `fd593d7`, com cópia da pasta no scratchpad): `omarchy plugin
+remove --yes` (rodado pelo usuário) apagou a pasta e a entrada no `shell.json`; **0 conexões** do
+`quickshell` com as impressoras e nenhum `curl` sobrando. Reinstalado do GitHub (`fd593d7`, conteúdo
+igual ao da cópia), `.specify/feature.json` restaurado, `shell.json` restaurado do backup (Voron e
+Biqu B1), shell reiniciado: 2 conexões de novo, nenhum erro no log.
