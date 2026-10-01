@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft
+**Status**: Concluída em 2026-10-01 (serviço do Klipper parado pelo usuário e reiniciado pelo painel na Voron; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "reiniciar o serviço do Klipper pelo painel: quando o Klipper está desconectado do Moonraker (a impressora responde, mas \"Klippy Host not connected\"), oferecer no painel um botão com confirmação para reiniciar o serviço do Klipper no computador da impressora, recuperando sem abrir o Mainsail; complementa a fatia 007 (que cobre shutdown/erro com FIRMWARE_RESTART)"
 

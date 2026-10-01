@@ -51,4 +51,10 @@ validada.
 
 Clique e Escape pelo usuário; `summon`/`hide`, `disable`/`enable` (o `enable` recria a entrada sem
 as impressoras; restauradas do backup) e reinício do shell por comando, sem `curl` sobrando; depois
-do reinício, painel com a Voron ociosa e atualizada. `remove`/reinstalar: depois do push.
+do reinício, painel com a Voron ociosa e atualizada.
+
+Remover (2026-10-01, depois do push de `e58250f`, com cópia da pasta no scratchpad):
+`omarchy plugin remove --yes` apagou a pasta e a entrada no `shell.json`; nenhum `notify-send`
+sobrando. Reinstalado do GitHub (`e58250f`, conteúdo igual ao da cópia), `.specify/feature.json`
+restaurado, Voron e Biqu recadastradas, shell reiniciado sem `curl` sobrando: painel com a Biqu
+ociosa (seleção automática), Emergency stop e Open web UI.
