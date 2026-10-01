@@ -111,9 +111,11 @@ da configuração; desistir não remove.
 - **Configuração editada à mão**: renomear, `webUrl` e a ordem continuam pela configuração do shell;
   adicionar e remover pelo painel preservam esses campos das outras impressoras.
 - **Gravação falha** (o shell recusa ou não responde): o painel mostra o motivo e a lista não muda.
-- **Duas barras** (um monitor = uma barra) ou o widget mais de uma vez na barra: a mudança vale para
-  o widget cujo painel o usuário usou; as barras que mostram o mesmo widget passam a mostrar a lista
-  nova.
+- **Duas barras** (um monitor = uma barra): a mudança vale para o widget cujo painel o usuário usou;
+  as barras de todos os monitores passam a mostrar a lista nova.
+- **O widget mais de uma vez na mesma barra** (raro): o shell não diz qual entrada da configuração é
+  a deste painel, então adicionar e remover ficam indisponíveis, com um aviso para editar a
+  configuração (decidido no plano, research R1).
 - **Rede grande ou várias redes**: a verificação cobre só a rede local do computador (as redes
   diretamente ligadas a ele, até 254 endereços cada), nunca VPNs; é feita com consultas de leitura,
   em paralelo limitado, e termina em até 30 s.
