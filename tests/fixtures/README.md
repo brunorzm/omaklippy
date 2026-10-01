@@ -102,9 +102,6 @@ in the same `{ exitCode, stdout }` format.
   `klippy_state`, `moonraker_version` (the rest carries paths with the printer's user name).
 - `printer-info-disconnected.synthetic.json`: `/printer/info` while Klipper is disconnected (503).
 - `server-info-not-moonraker.synthetic.json`: a 200 from something that is not Moonraker.
-- `set-widget-ok.json`, `set-widget-error.synthetic.json`: the stdout of `omarchy-shell shell
-  setBarWidget …` when the shell saves (`ok`) and when it refuses (`could not find widget …`; the
-  command exits 0 in both cases).
 
 ## Live connection fixtures (slice 010)
 

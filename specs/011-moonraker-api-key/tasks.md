@@ -173,3 +173,11 @@ Task: "T019 Auditorias"
 - Commits só quando o usuário pedir; push só quando ele disser "push".
 - Fora de escopo (spec): cofre de senhas do sistema, criptografar a configuração, login com usuário
   e senha, editar outros campos da impressora pelo painel.
+
+## Correção pós-submissão (2026-10-01)
+
+- [X] Achado da revisão do marketplace: a gravação (009) punha a lista com as chaves na linha de
+  comando do `omarchy-shell`. Gravação trocada por `bar.shell.updateEntryInline` no processo do
+  shell (`buildSaveEntry`, `entryChanged`); caminho antigo removido; testes antigos que saíram de
+  propósito: os de `buildSaveArgs` e `parseSaveResult` em `tests/printer-setup.test.js` e as
+  fixtures `set-widget-*`; versão 0.11.1; conferido ao vivo (ver hardware-test).

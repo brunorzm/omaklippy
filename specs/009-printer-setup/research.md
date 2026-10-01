@@ -5,6 +5,12 @@ a pedido; adicionar e remover) foram tomadas pelo usuário antes da spec.
 
 ## R1. Gravar a lista de impressoras (FR-004, FR-006, FR-007)
 
+> **Substituída em 2026-10-01 (pós-submissão ao marketplace, ver
+> [011 hardware-test](../011-moonraker-api-key/hardware-test.md#correção-pós-submissão-a-gravação-sem-linha-de-comando)):**
+> a gravação passou a usar `bar.shell.updateEntryInline` dentro do processo do shell. O caminho
+> abaixo pelo `omarchy-shell` punha a lista inteira — com as chaves de API da 011 — na linha de
+> comando de um processo filho, visível a outros usuários.
+
 - **Decision**: o widget roda, como processo, `omarchy-shell shell setBarWidget
   io.github.brunorzm.omaklippy printers "<espaço><JSON da lista>" "{}"`. O shell grava a entrada do
   widget no `shell.json` dele (`PluginRegistry.setBarWidget` → `shellConfigMutator`), avisa os

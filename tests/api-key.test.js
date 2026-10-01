@@ -307,3 +307,47 @@ test("the US3 functions tolerate garbage", () => {
     for (const a of GARBAGE) for (const b of GARBAGE) assert.doesNotThrow(() => M[name](a, b, a, b, a, b, a), name)
   }
 })
+
+// ---- Correção pós-submissão: a gravação não passa por linha de comando
+
+test("buildSaveEntry keeps every other setting and replaces only the printers", () => {
+  const settings = { id: "io.github.brunorzm.omaklippy", refreshIntervalSec: 10, timeoutSec: 4, notifyPaused: "Off",
+    printers: [{ name: "Lab", address: "lab.local" }] }
+  const list = [{ name: "Lab", address: "lab.local", apiKey: KEY }]
+  const entry = M.buildSaveEntry(settings, list)
+  assert.deepEqual(entry, { refreshIntervalSec: 10, timeoutSec: 4, notifyPaused: "Off", printers: list })
+  assert.equal("id" in entry, false)
+  assert.equal(Array.isArray(entry), false)
+  // A plain copy: changing it never touches the settings or the list.
+  entry.printers[0].name = "x"
+  assert.equal(list[0].name, "Lab")
+  // Text printers (slice 001) are saved back as a list.
+  assert.deepEqual(M.buildSaveEntry({ printers: JSON.stringify([{ address: "a.local" }]) }, [{ address: "a.local" }]).printers, [{ address: "a.local" }])
+  for (const g of GARBAGE) assert.doesNotThrow(() => M.buildSaveEntry(g, g))
+})
+
+test("entryChanged tells a real change from a no-op save", () => {
+  const settings = { refreshIntervalSec: 10, printers: [{ name: "Lab", address: "lab.local" }] }
+  assert.equal(M.entryChanged(settings, M.buildSaveEntry(settings, settings.printers)), false)
+  assert.equal(M.entryChanged(settings, M.buildSaveEntry(settings, [{ name: "Lab", address: "lab.local", apiKey: KEY }])), true)
+  // The text form becomes a list: that is a change worth saving.
+  const text = { printers: JSON.stringify([{ address: "a.local" }]) }
+  assert.equal(M.entryChanged(text, M.buildSaveEntry(text, [{ address: "a.local" }])), true)
+  for (const g of GARBAGE) assert.doesNotThrow(() => M.entryChanged(g, g))
+})
+
+test("no save path builds a command line any more", () => {
+  assert.equal(M.buildSaveArgs, undefined)
+  assert.equal(M.parseSaveResult, undefined)
+  // Every argv the model can build for a printer with a key stays clean.
+  const p = printers()
+  const st = printingStatuses(p)
+  const argvs = [
+    ...M.planDispatch(M.reconcileStatuses({}, p), p, 3000).requests.map(r => r.args),
+    ...M.planEstimate(st, p, 3000).requests.map(r => r.args),
+    M.planCommand({}, p[0], st[LAB], "pause", 3000, 2000).request.args,
+    M.planOpenWeb({}, p[0], 0).request.args,
+    M.buildNotification({ type: "complete", filename: "x.gcode" }, p[0].displayName).args
+  ]
+  for (const a of argvs) noKeyIn(a, "argv " + a[0])
+})

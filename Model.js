@@ -87,8 +87,8 @@ var TEXT = {
     noLocalNetwork: "No local network found: searched by announcements only.",
     notEditable: "OmaKlippy is on this bar more than once: edit the printers in shell.json.",
     saveFailed: "Could not save the printers: %1",
-    shellNotFound: "omarchy-shell not found",
-    shellNoAnswer: "no answer from the shell",
+    shellCannotSave: "this shell cannot save plugin settings",
+    shellRefused: "the shell did not accept the change",
     apiKey: "API key",
     apiKeyHint: "API key %1",
     setApiKey: "Set API key",
@@ -1612,12 +1612,11 @@ function buildPanelModel(printers, statusesByKey, selectedKey, now, commandsByKe
 }
 
 // ---- Printer setup (slice 009): the list the shell saves, the network
-//      search and the add-by-address form. The shell writes its own config
-//      (omarchy-shell … setBarWidget); the plugin writes no file.
+//      search and the add-by-address form. The shell writes its own config,
+//      in its own process (bar.shell.updateEntryInline); the plugin writes no
+//      file and never passes the list (API keys included) on a command line.
 
-var PLUGIN_ID = "io.github.brunorzm.omaklippy"
 var DISCOVERY_TIMEOUT_MS = 30000
-var SAVE_TIMEOUT_MS = 5000
 var NETS_TIMEOUT_MS = 3000
 var MDNS_TIMEOUT_MS = 6000
 var SCAN_TIMEOUT_MS = 20000
@@ -1722,27 +1721,26 @@ function setPrinterApiKey(raw, order, apiKey) {
   return { list: out, error: "" }
 }
 
-// The space before the JSON is required: qs ipc (Quickshell 0.3.1) splits an
-// argument that starts with "[" into several, and the shell's JSON.parse
-// ignores the space (research R1).
-function buildSaveArgs(list) {
-  var items = toList(list, false)
-  var json = "[]"
-  try { json = JSON.stringify(items) } catch (e) { json = "[]" }
-  return ["omarchy-shell", "shell", "setBarWidget", PLUGIN_ID, "printers", " " + json, "{}"]
+// The widget's whole inline entry with a new printers list: the shell's
+// updateEntryInline replaces the entry, so every other setting is carried
+// over. A plain copy (no QML wrappers), without the id the shell adds itself.
+function buildSaveEntry(settings, list) {
+  var src = isObject(settings) ? settings : {}
+  var out = {}
+  for (var k in src) if (k !== "id" && k !== "printers") out[k] = src[k]
+  out.printers = toList(list, false).slice()
+  try { return JSON.parse(JSON.stringify(out)) } catch (e) { return { printers: [] } }
 }
 
-// omarchy-shell exits 0 even when the shell refuses, so the answer text
-// decides. exitCode -2 is the guard timer; launched false, a missing binary.
-function parseSaveResult(stdout, exitCode, launched, stderr) {
-  if (launched === false) return { ok: false, message: TEXT.setup.shellNotFound }
-  if (exitCode === -2) return { ok: false, message: TEXT.setup.shellNoAnswer }
-  var out = typeof stdout === "string" ? stdout.trim() : ""
-  if (out === "ok") return { ok: true, message: "" }
-  if (out !== "") return { ok: false, message: tidyMessage(out) }
-  var err = typeof stderr === "string" ? tidyMessage(stderr) : ""
-  if (err !== "") return { ok: false, message: err }
-  return { ok: false, message: typeof exitCode === "number" && exitCode !== 0 ? "exit " + exitCode : TEXT.setup.shellNoAnswer }
+// Whether saving entry would change anything: the shell answers false both
+// for "nothing changed" and for a refusal, so the widget asks this first.
+function entryChanged(settings, entry) {
+  var src = isObject(settings) ? settings : {}
+  var current = {}
+  for (var k in src) if (k !== "id") current[k] = src[k]
+  // Same key order as buildSaveEntry, so only real differences count.
+  if ("printers" in current) { var p = current.printers; delete current.printers; current.printers = p }
+  try { return JSON.stringify(current) !== JSON.stringify(entry) } catch (e) { return true }
 }
 
 // ---- Search: local networks, announcements, the network check, names.
@@ -2413,7 +2411,7 @@ function emptyLive(url, apiKey) {
   return e
 }
 
-var PLUGIN_VERSION = "0.11.0"
+var PLUGIN_VERSION = "0.11.1"
 var PLUGIN_URL = "https://github.com/brunorzm/omaklippy"
 
 function buildIdentifyMessage(id, apiKey, version) {
@@ -2740,8 +2738,8 @@ if (typeof module !== "undefined") {
     rawPrinters: rawPrinters,
     addPrinterToList: addPrinterToList,
     removePrinterFromList: removePrinterFromList,
-    buildSaveArgs: buildSaveArgs,
-    parseSaveResult: parseSaveResult,
+    buildSaveEntry: buildSaveEntry,
+    entryChanged: entryChanged,
     buildNetsArgs: buildNetsArgs,
     parseLocalNets: parseLocalNets,
     buildMdnsArgs: buildMdnsArgs,
@@ -2778,7 +2776,6 @@ if (typeof module !== "undefined") {
     buildSetupModel: buildSetupModel,
     setupCursorStops: setupCursorStops,
     DISCOVERY_TIMEOUT_MS: DISCOVERY_TIMEOUT_MS,
-    SAVE_TIMEOUT_MS: SAVE_TIMEOUT_MS,
     readingFromStatus: readingFromStatus,
     liveUrl: liveUrl,
     buildSubscribeMessage: buildSubscribeMessage,

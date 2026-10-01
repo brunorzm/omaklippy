@@ -81,27 +81,6 @@ test("removePrinterFromList removes by order and keeps the rest", () => {
   assert.deepEqual(M.removePrinterFromList(raw(), 7), raw())
 })
 
-test("buildSaveArgs puts a space before the JSON (qs ipc splits a leading [)", () => {
-  const list = [{ name: "Biqu B1", address: "biqu.local" }]
-  assert.deepEqual(M.buildSaveArgs(list), ["omarchy-shell", "shell", "setBarWidget", "io.github.brunorzm.omaklippy",
-    "printers", " " + JSON.stringify(list), "{}"])
-  assert.deepEqual(M.buildSaveArgs([]), ["omarchy-shell", "shell", "setBarWidget", "io.github.brunorzm.omaklippy",
-    "printers", " []", "{}"])
-})
-
-test("parseSaveResult", () => {
-  const ok = fx("set-widget-ok")
-  assert.deepEqual(M.parseSaveResult(ok.stdout, ok.exitCode, true), { ok: true, message: "" })
-  const err = fx("set-widget-error.synthetic")
-  assert.deepEqual(M.parseSaveResult(err.stdout, err.exitCode, true),
-    { ok: false, message: "could not find widget io.github.brunorzm.omaklippy" })
-  assert.deepEqual(M.parseSaveResult("", -1, false), { ok: false, message: "omarchy-shell not found" })
-  assert.deepEqual(M.parseSaveResult("", -2, true), { ok: false, message: M.TEXT.setup.shellNoAnswer })
-  assert.deepEqual(M.parseSaveResult("", 1, true, "omarchy-shell is not running\n"),
-    { ok: false, message: "omarchy-shell is not running" })
-  assert.equal(M.parseSaveResult("", 3, true).ok, false)
-})
-
 // ---- Redes, anúncio, verificação, nomes
 
 test("parseLocalNets keeps only the real local networks", () => {
@@ -561,7 +540,7 @@ test("remove confirmation texts", () => {
 // ---- Nunca lança
 
 test("every new function tolerates garbage", () => {
-  const fns = ["rawPrinters", "addPrinterToList", "removePrinterFromList", "buildSaveArgs", "parseSaveResult",
+  const fns = ["rawPrinters", "addPrinterToList", "removePrinterFromList",
     "parseLocalNets", "parseMdns", "buildScanArgs", "parseScan", "buildReverseArgs", "parseReverse",
     "buildHostnameArgs", "parseHostname", "parseMoonrakerCheck", "startDiscovery", "acceptNets", "acceptMdns",
     "acceptScan", "acceptReverse", "acceptHostname", "cancelDiscovery", "expireDiscovery", "discoveryDone",

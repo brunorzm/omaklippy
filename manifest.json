@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.brunorzm.omaklippy",
   "name": "OmaKlippy",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "author": "Bruno",
   "license": "MIT",
   "description": "3D printer status and control for Klipper/Moonraker",

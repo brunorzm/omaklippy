@@ -139,10 +139,11 @@ Open the panel and press **Printers…** (a panel without printers opens straigh
   already in the list is refused.
 - **Remove <name>** removes the printer selected in the panel, after a confirmation.
 
-The shell saves the list (`omarchy-shell shell setBarWidget`, the same method `omarchy bar set`
-uses), keeping every other field of your printers (`webUrl`, names) as it was. If OmaKlippy is on
-the same bar more than once, the panel cannot tell which entry is its own and asks you to edit
-`shell.json` instead.
+The shell saves the list itself, inside its own process (the settings call it gives plugins, as
+the built-in clock uses), keeping every other setting and every field of your printers (`webUrl`,
+names, API keys) as it was; no command is run, so the list never shows up in the process list. If
+OmaKlippy is on the same bar more than once, the panel cannot tell which entry is its own and asks
+you to edit `shell.json` instead.
 
 For a printer to show up through announcements too, turn them on in its `moonraker.conf`:
 
@@ -252,7 +253,6 @@ rest of the widget's settings: on a computer you share, prefer adding this compu
 | `notify-send` | optional, for the notifications | Sends the desktop notifications to the shell's notification service. Part of `libnotify`. Run without a shell, with a 10 s guard. Without it, the panel shows "Notifications unavailable: notify-send not found"; everything else keeps working. |
 | `omarchy-launch-browser` | required at runtime, for **Open web UI** only | Opens the web UI in the default browser, the way Omarchy does (its own systemd unit, window focused). Part of the `omarchy` package. Run without a shell, with a 10 s guard. Without it, the button shows "Open web UI failed: omarchy-launch-browser not found"; everything else keeps working. |
 | QtWebSockets (`qt6-websockets`) | optional, for live updates | The QML module behind the live connection to each printer. Not part of Omarchy (here it came with `nextcloud-client`). Without it, the panel shows "Live updates unavailable: install qt6-websockets" and the plugin polls as before; everything else keeps working. |
-| `omarchy-shell` | required, to add or remove printers from the panel | Asks the shell to save the new printer list (`omarchy-shell shell setBarWidget …`). Part of the `omarchy` package. Run without a shell, with a 5 s guard. Without it, adding and removing show "Could not save the printers: omarchy-shell not found"; everything else keeps working. |
 | `ip` | required, for the network check in **Search network** | Lists this computer's local networks (`ip -j -4 addr show`). Part of `iproute2`. Without it, the search uses announcements only and says so. |
 | `avahi-browse`, `avahi-resolve` | optional, for **Search network** | Read Moonraker announcements (`avahi-browse -rtp _moonraker._tcp`) and the name on the network of each printer found (`avahi-resolve -a`). Part of `avahi`. Without them, the search uses the network check only (and says so) and printers found are saved by IP. |
 | `node` | development only | Runs the tests for the pure logic (`node --test tests/`). |
@@ -269,7 +269,8 @@ No other external binary is ever run.
   Moonraker's info endpoints only.
 - Keeps one connection per bar to each printer you add, only to subscribe to its status (read-only)
   and to ping it (and, with an API key, to identify with it); nothing else is sent over it.
-- Sends a printer's API key only to that printer, never on a command line or in an address.
+- Sends a printer's API key only to that printer, never on a command line or in an address; saving
+  the printers runs no command at all (the shell writes `shell.json` in its own process).
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
   press one of the panel's buttons (Cancel, Emergency stop, Restart firmware and Restart Klipper only after you confirm).
 - Opens your default browser only when you press **Open web UI**.

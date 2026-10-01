@@ -72,3 +72,36 @@ remove --yes` (rodado pelo usuário) apagou a pasta e a entrada no `shell.json`;
 `curl` sobrando. Reinstalado do GitHub (`3be11ac`, conteúdo igual ao da cópia), `.specify/feature.json`
 restaurado, `shell.json` restaurado do backup, shell reiniciado: 4 conexões (dois monitores), nenhum
 erro no log.
+
+## Correção pós-submissão: a gravação sem linha de comando
+
+Achado da revisão do marketplace do Omarchy (2026-10-01, em `7a9b276`): a gravação das impressoras
+(fatia 009) rodava `omarchy-shell shell setBarWidget … printers " <json>"`, com a lista inteira —
+e, desde a 011, as chaves de API de todas as impressoras — na linha de comando de um processo filho,
+visível a outros usuários do computador. A varredura da T012 só olhava os processos `curl` e não
+pegou esse caso.
+
+Correção (0.11.1): a gravação usa `bar.shell.updateEntryInline(moduleName, entry)`, a fachada de
+configuração que o shell dá a plugins de terceiros (a mesma que o relógio nativo usa), dentro do
+processo do shell; nenhum processo filho. `entry` é a entrada inteira do widget com a lista nova
+(`buildSaveEntry`: o shell substitui a entrada, então as outras configurações vão junto); uma
+gravação sem mudança não chama o shell (`entryChanged`), porque a resposta `false` dele não separa
+"nada mudou" de "recusado". O caminho antigo (`buildSaveArgs`, `parseSaveResult`, o processo
+`omarchy-shell`, as fixtures `set-widget-*`) foi removido, sem ficar como alternativa. Diferença de
+comportamento: o shell regrava todas as entradas do widget com esse id, não só a primeira; o aviso
+"OmaKlippy is on this bar more than once" continua impedindo a edição nesse caso.
+
+Conferido ao vivo: observador de todos os processos filhos do shell a cada 10 ms, procurando
+`omarchy-shell`, `setBarWidget` e a chave de teste; o usuário pôs `omaklippy-test-key` na Voron pelo
+painel (Set API key) e tirou (Remove API key):
+
+```text
+18:49:07  shell.json: Voron com "apiKey": "omaklippy-test-key"   (gravado pelo shell)
+18:49:18  shell.json: Voron sem apiKey
+          nenhum processo filho do shell com omarchy-shell, setBarWidget ou a chave
+          shell.json inteiro com o mesmo conteúdo de antes; nenhum erro no log
+```
+
+Testes puros: `buildSaveArgs`/`parseSaveResult` não existem mais; `buildSaveEntry` preserva as outras
+configurações e não leva `id`; `entryChanged`; nenhum argv construído pelo modelo para uma impressora
+com chave (consultas, estimativa, comando, navegador, notificação) contém a chave.

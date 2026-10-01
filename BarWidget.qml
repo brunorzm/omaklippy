@@ -289,7 +289,6 @@ BarWidget {
     stopRequests(false)
     stopAll(discoveryHolder)
     stopAll(formHolder)
-    stopAll(saveHolder)
   }
 
   Timer {
@@ -770,7 +769,7 @@ BarWidget {
     }
   }
 
-  // ---- Printer setup (slice 009). The shell saves the list (Model.buildSaveArgs);
+  // ---- Printer setup (slice 009). The shell saves the list (savePrinters);
   //      the search and the add-by-address form are Model state machines whose
   //      requests run here as processes, each in its own holder so a config
   //      change (stopRequests) never cuts them short.
@@ -838,8 +837,6 @@ BarWidget {
       form = f.form
       if (f.request) run(formHolder, "form", [f.request])
       saveFormIfReady()
-    } else if (sink === "save") {
-      acceptSave(seq, Model.parseSaveResult(stdout, exitCode, launched, stderr))
     }
   }
 
@@ -868,14 +865,27 @@ BarWidget {
     keyMessage = ""
   }
 
+  // Saved by the shell in its own process, through the facade it gives
+  // third-party plugins (bar.shell.updateEntryInline, as the clock does):
+  // no child process, so the list and its API keys never reach a command
+  // line. The call is synchronous and the new settings can arrive before it
+  // returns, so the keys to select are set first.
   function savePrinters(list, selectKey) {
     if (saveState.busy || !editable) return false
     saveSeq += 1
     pendingSelectKey = String(selectKey || "")
     saveSelectKey = pendingSelectKey
-    saveState = { busy: true, message: "" }
-    run(saveHolder, "save", [{ kind: "save", seq: saveSeq, args: Model.buildSaveArgs(list), guardMs: Model.SAVE_TIMEOUT_MS }])
-    return true
+    var entry = Model.buildSaveEntry(root.settings, list)
+    var result = { ok: true, message: "" }
+    if (Model.entryChanged(root.settings, entry)) {
+      var api = root.bar ? root.bar.shell : null
+      if (!api || typeof api.updateEntryInline !== "function")
+        result = { ok: false, message: Model.TEXT.setup.shellCannotSave }
+      else if (!api.updateEntryInline(root.moduleName, entry))
+        result = { ok: false, message: Model.TEXT.setup.shellRefused }
+    }
+    acceptSave(saveSeq, result)
+    return result.ok
   }
 
   function acceptSave(seq, result) {
@@ -886,8 +896,8 @@ BarWidget {
       pendingSelectKey = ""
       return
     }
-    // The new list may already be here (the shell tells the widgets before
-    // its IPC answer arrives, as seen live) or come right after.
+    // The new list may already be here (the shell passes it to the widgets
+    // while saving) or come right after.
     applyPendingSelection()
     printersSaved(saveSelectKey)
   }
@@ -980,11 +990,6 @@ BarWidget {
 
   Item {
     id: formHolder
-    visible: false
-  }
-
-  Item {
-    id: saveHolder
     visible: false
   }
 
