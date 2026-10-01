@@ -147,7 +147,7 @@ without restarting. Printers can be added and removed from the panel (above) or 
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `printers` | `[]` | List of `{ "name": "...", "address": "...", "webUrl": "..." }`. The address (Moonraker) accepts `host`, `host:port` or `http(s)://host[:port]`. Names may repeat; the panel then shows the address next to them. `webUrl` is optional, takes the same forms and is opened as typed by **Open web UI**; without it the button opens the address minus port 7125. An invalid `webUrl` only hides that printer's button. |
+| `printers` | `[]` | List of `{ "name": "...", "address": "...", "webUrl": "...", "apiKey": "..." }` (`apiKey` optional, see API key). The address (Moonraker) accepts `host`, `host:port` or `http(s)://host[:port]`. Names may repeat; the panel then shows the address next to them. `webUrl` is optional, takes the same forms and is opened as typed by **Open web UI**; without it the button opens the address minus port 7125. An invalid `webUrl` only hides that printer's button. |
 | `refreshIntervalSec` | `5` | Time between polls, 2 to 3600 s, while a printer is not live (see Live updates). |
 | `timeoutSec` | `3` | Timeout for each poll, 1 to 30 s. Without an answer in time, the printer shows as offline. |
 | `notifyComplete` | `"On"` | `"On"` or `"Off"`: the **Print complete** notification. |
@@ -208,7 +208,29 @@ trusted_clients:
     192.168.0.0/16
 ```
 
-Otherwise the printer shows as "error: unauthorized — allow this computer in trusted_clients".
+Otherwise the printer shows as "error: unauthorized — allow this computer in trusted_clients or set
+an API key".
+
+### API key
+
+A printer that does not trust this computer works with its Moonraker **API key** instead. Set it
+from the panel (**Printers…** → **Set API key** for the selected printer, or when **Add by address**
+says the printer needs one) or as `apiKey` on the printer in `shell.json`:
+
+```json
+{ "name": "Lab", "address": "lab.local", "apiKey": "…" }
+```
+
+Moonraker hands its API key to a trusted client (`GET /access/api_key`), so read it from a computer
+it already trusts. With a wrong or changed key the printer shows "API key rejected"; **Remove API
+key** takes it out.
+
+The key gives full control of the printer. The plugin only ever sends it to that printer: to `curl`
+on its standard input (`-H @-`), never on the command line, and inside the live connection's
+`server.connection.identify`, never in an address; the panel only shows its last four characters.
+**`shell.json` is readable by every user of this computer**, though, and the key sits there like the
+rest of the widget's settings: on a computer you share, prefer adding this computer to the printer's
+`trusted_clients`.
 
 ## Dependencies
 
@@ -234,7 +256,8 @@ No other external binary is ever run.
 - Searches the local network only when you press **Search network**, with `GET` requests to
   Moonraker's info endpoints only.
 - Keeps one connection per bar to each printer you add, only to subscribe to its status (read-only)
-  and to ping it; nothing else is sent over it.
+  and to ping it (and, with an API key, to identify with it); nothing else is sent over it.
+- Sends a printer's API key only to that printer, never on a command line or in an address.
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
   press one of the panel's buttons (Cancel, Emergency stop, Restart firmware and Restart Klipper only after you confirm).
 - Opens your default browser only when you press **Open web UI**.

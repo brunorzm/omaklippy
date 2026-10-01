@@ -374,7 +374,7 @@ test("parseMoonrakerCheck", () => {
   const refused = loadFixture("refused")
   assert.deepEqual(M.parseMoonrakerCheck(refused.stdout, refused.exitCode), { ok: false, message: M.TEXT.connectionRefused })
   const unauthorized = loadFixture("unauthorized")
-  assert.deepEqual(M.parseMoonrakerCheck(unauthorized.stdout, unauthorized.exitCode), { ok: false, message: M.TEXT.unauthorized })
+  assert.deepEqual(M.parseMoonrakerCheck(unauthorized.stdout, unauthorized.exitCode), { ok: false, message: M.TEXT.unauthorized, needsKey: true })
   const other = fx("server-info-not-moonraker.synthetic")
   assert.deepEqual(M.parseMoonrakerCheck(other.stdout, other.exitCode), { ok: false, message: M.TEXT.setup.notMoonraker })
   for (const g of GARBAGE) assert.equal(M.parseMoonrakerCheck(g, 0).ok, false)
@@ -525,7 +525,7 @@ test("setupCursorStops walks the setup screen in reading order", () => {
   const p = printers()
   const d = fullSearch()
   const m = M.buildSetupModel(p, d, M.emptyForm(), p[0].key, true, "")
-  assert.deepEqual(M.setupCursorStops(m, false), ["search", "add:192.168.1.120", "address", "name", "submit", "remove", "back"])
+  assert.deepEqual(M.setupCursorStops(m, false), ["search", "add:192.168.1.120", "address", "name", "submit", "remove", "setKey", "back"])
   // The empty panel has no Back and nothing to remove.
   const e = M.buildSetupModel([], M.emptyDiscovery(), M.emptyForm(), "", true, "")
   assert.deepEqual(M.setupCursorStops(e, true), ["search", "address", "name", "submit"])

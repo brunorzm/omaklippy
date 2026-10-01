@@ -37,7 +37,8 @@ Panel {
   readonly property var setupModel: hostWidget && hostWidget.setupModel
     ? hostWidget.setupModel
     : Model.buildSetupModel([], null, null, "", true, "")
-  readonly property bool fieldFocused: addressField.activeFocus || nameField.activeFocus
+  readonly property bool fieldFocused: addressField.activeFocus || nameField.activeFocus || formKeyField.activeFocus
+    || keyField.activeFocus
   readonly property var stops: Model.panelStops(panelModel, setupModel, inSetup)
   property string cursorStop: ""
   // Action waiting for confirmation, and the printer it was asked for: the
@@ -81,8 +82,20 @@ Panel {
     else if (id.indexOf("add:") === 0) hostWidget.addFound(id.slice(4))
     else if (id === "address") addressField.forceActiveFocus()
     else if (id === "name") nameField.forceActiveFocus()
-    else if (id === "submit") submitForm()
+    else if (id === "submit" || id === "checkAgain") submitForm()
     else if (id === "addAnyway") hostWidget.addAnyway()
+    else if (id === "formKey") formKeyField.forceActiveFocus()
+    else if (id === "setKey") {
+      hostWidget.keyEditing = true
+      Qt.callLater(function() { keyField.forceActiveFocus() })
+    }
+    else if (id === "keyField") keyField.forceActiveFocus()
+    else if (id === "saveKey") saveKey()
+    else if (id === "removeKey" && setupModel.removeKey !== "") {
+      confirm.selectedIndex = 0
+      confirmKey = setupModel.removeKey
+      confirmAction = "removeApiKey"
+    }
     else if (id === "back") showView("main")
     else if (id === "remove" && setupModel.removeKey !== "") {
       // Back is preselected, as for the printer actions.
@@ -92,8 +105,16 @@ Panel {
     }
   }
 
+  // The key field shows only once the printer asked for a key.
   function submitForm() {
-    if (hostWidget) hostWidget.submitForm(addressField.text, nameField.text)
+    if (hostWidget) hostWidget.submitForm(addressField.text, nameField.text, setupModel.formNeedsKey ? formKeyField.text : "")
+    keyCatcher.forceActiveFocus()
+  }
+
+  // The typed key never stays in the field once handed over.
+  function saveKey() {
+    if (hostWidget && setupModel.removeKey !== "") hostWidget.setApiKey(setupModel.removeKey, keyField.text)
+    keyField.text = ""
     keyCatcher.forceActiveFocus()
   }
 
@@ -112,6 +133,7 @@ Panel {
       if (selectKey === "") return
       addressField.text = ""
       nameField.text = ""
+      formKeyField.text = ""
       root.showView("main")
     }
   }
@@ -174,6 +196,7 @@ Panel {
     cancelConfirm()
     if (!hostWidget || key === "" || action === "") return
     if (action === "removePrinter") hostWidget.removePrinter(key)
+    else if (action === "removeApiKey") hostWidget.removeApiKey(key)
     else hostWidget.runAction(key, action)
   }
 
@@ -182,7 +205,7 @@ Panel {
   // longer be pressed (the print ended, another command started).
   function checkConfirm() {
     if (confirmAction === "") return
-    if (confirmAction === "removePrinter") {
+    if (confirmAction === "removePrinter" || confirmAction === "removeApiKey") {
       if (!inSetup || setupModel.removeKey !== confirmKey) cancelConfirm()
       return
     }
@@ -692,6 +715,17 @@ Panel {
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
                     }
+
+                    Text {
+                      visible: resultRow.modelData.needsKey === true
+                      width: parent.width
+                      elide: Text.ElideRight
+                      textFormat: Text.PlainText
+                      text: Model.TEXT.setup.needsKey
+                      color: root.dim
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                    }
                   }
 
                   SetupButton {
@@ -789,7 +823,40 @@ Panel {
                 }
 
                 SetupButton {
-                  visible: root.setupModel.showAddAnyway
+                  visible: root.setupModel.showAddAnyway && !root.setupModel.formNeedsKey
+                  stopId: "addAnyway"
+                  text: Model.TEXT.setup.addAnyway
+                }
+              }
+
+              // The printer refused this computer: its API key, then check again.
+              TextField {
+                id: formKeyField
+                visible: root.setupModel.editable && root.setupModel.formNeedsKey
+                width: parent.width
+                password: true
+                placeholderText: Model.TEXT.setup.apiKey
+                foreground: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                hasCursor: root.cursorStop === "formKey"
+                onAccepted: root.submitForm()
+                Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+                onActiveFocusChanged: if (activeFocus) root.cursorStop = "formKey"
+                onVisibleChanged: if (!visible) text = ""
+              }
+
+              Row {
+                visible: root.setupModel.editable && root.setupModel.formNeedsKey
+                width: parent.width
+                spacing: Style.space(6)
+
+                SetupButton {
+                  stopId: "checkAgain"
+                  text: Model.TEXT.setup.checkAgain
+                }
+
+                SetupButton {
                   stopId: "addAnyway"
                   text: Model.TEXT.setup.addAnyway
                 }
@@ -817,6 +884,73 @@ Panel {
                 stopId: "remove"
                 text: root.setupModel.removeLabel
                 iconText: Model.ACTION_GLYPHS.remove
+              }
+
+              // The selected printer's API key (slice 011): only its last
+              // characters are ever shown.
+              Text {
+                visible: root.setupModel.editable && root.setupModel.apiKeyHintText !== ""
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.setupModel.apiKeyHintText
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Row {
+                visible: root.setupModel.editable && root.setupModel.removeKey !== ""
+                width: parent.width
+                spacing: Style.space(6)
+
+                SetupButton {
+                  stopId: "setKey"
+                  text: Model.TEXT.setup.setApiKey
+                  iconText: Model.ACTION_GLYPHS.add
+                }
+
+                SetupButton {
+                  visible: root.setupModel.hasKey
+                  stopId: "removeKey"
+                  text: Model.TEXT.setup.removeApiKey
+                }
+              }
+
+              Row {
+                visible: root.setupModel.keyEditing
+                width: parent.width
+                spacing: Style.space(6)
+
+                TextField {
+                  id: keyField
+                  width: parent.width - saveKeyButton.width - parent.spacing
+                  password: true
+                  placeholderText: Model.TEXT.setup.apiKey
+                  foreground: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  hasCursor: root.cursorStop === "keyField"
+                  onAccepted: root.saveKey()
+                  Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+                  onActiveFocusChanged: if (activeFocus) root.cursorStop = "keyField"
+                  onVisibleChanged: if (!visible) text = ""
+                }
+
+                SetupButton {
+                  id: saveKeyButton
+                  stopId: "saveKey"
+                  text: Model.TEXT.setup.saveApiKey
+                }
+              }
+
+              Text {
+                visible: root.hostWidget && (root.hostWidget.keyMessage || "") !== ""
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.hostWidget ? root.hostWidget.keyMessage || "" : ""
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
               }
 
               // Same look as a failed printer action.
@@ -861,7 +995,7 @@ Panel {
           anchors.fill: parent
           z: 10
           opened: root.confirmAction !== ""
-          message: root.confirmAction === "removePrinter"
+          message: root.confirmAction === "removePrinter" || root.confirmAction === "removeApiKey"
             ? Model.confirmMessage(root.confirmAction, root.setupModel.removeName)
             : Model.confirmMessage(root.confirmAction, root.selected.displayName, root.actions.filename)
           cancelText: Model.TEXT.confirm.back

@@ -58,7 +58,7 @@ BarWidget {
     statuses = plan.statuses
     for (var i = 0; i < plan.requests.length; i++) {
       var r = plan.requests[i]
-      requestComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: config.timeoutMs + 1000 })
+      requestComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, stdin: r.stdin || "", guardMs: config.timeoutMs + 1000 })
     }
     sideFetches()
   }
@@ -70,14 +70,14 @@ BarWidget {
     statuses = est.statuses
     for (var j = 0; j < est.requests.length; j++) {
       var e = est.requests[j]
-      estimateComponent.createObject(requestHolder, { key: e.key, seq: e.seq, filename: e.filename, args: e.args, guardMs: config.timeoutMs + 1000 })
+      estimateComponent.createObject(requestHolder, { key: e.key, seq: e.seq, filename: e.filename, args: e.args, stdin: e.stdin || "", guardMs: config.timeoutMs + 1000 })
     }
     // The Klipper service's name, once per disconnection (Model.planServiceInfo).
     var svc = Model.planServiceInfo(statuses, config.printers, config.timeoutMs)
     statuses = svc.statuses
     for (var k = 0; k < svc.requests.length; k++) {
       var s = svc.requests[k]
-      serviceInfoComponent.createObject(requestHolder, { key: s.key, seq: s.seq, args: s.args, guardMs: config.timeoutMs + 1000 })
+      serviceInfoComponent.createObject(requestHolder, { key: s.key, seq: s.seq, args: s.args, stdin: s.stdin || "", guardMs: config.timeoutMs + 1000 })
     }
   }
 
@@ -169,7 +169,7 @@ BarWidget {
     commands = plan.commands
     // Its effect must not come back as a notification, whichever bar reads it.
     Shared.state.protections = Model.protectStart(Shared.state.protections, r.key)
-    commandComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, guardMs: r.guardMs })
+    commandComponent.createObject(requestHolder, { key: r.key, seq: r.seq, args: r.args, stdin: r.stdin || "", guardMs: r.guardMs })
   }
 
   // Success or failure, the printer is asked again right away so the panel
@@ -336,6 +336,9 @@ BarWidget {
     Item {
       id: request
       required property string key
+      // "X-Api-Key: …" for a printer with an API key (slice 011), written to
+      // curl's stdin ("-H @-") and closed at once; "" for the others.
+      property string stdin: ""
       required property int seq
       required property var args
       required property int guardMs
@@ -364,14 +367,21 @@ BarWidget {
       }
 
       function tryComplete() {
-        if (exited && drained) complete(Model.parseResponse(output, exitCode))
+        if (exited && drained) complete(Model.parseResponse(output, exitCode, stdin !== ""))
       }
 
       Process {
         id: proc
         command: request.args
+        stdinEnabled: request.stdin !== ""
         running: true
-        onStarted: request.launched = true
+        onStarted: {
+          request.launched = true
+          if (request.stdin !== "") {
+            write(request.stdin)
+            stdinEnabled = false
+          }
+        }
         // A binary that cannot be executed never emits started/exited: the
         // Process just drops back to not running (checked on Quickshell with
         // a missing command). Report it as the missing-curl case instead of
@@ -413,6 +423,9 @@ BarWidget {
     Item {
       id: fetch
       required property string key
+      // "X-Api-Key: …" for a printer with an API key (slice 011), written to
+      // curl's stdin ("-H @-") and closed at once; "" for the others.
+      property string stdin: ""
       required property int seq
       required property string filename
       required property var args
@@ -448,8 +461,15 @@ BarWidget {
       Process {
         id: fetchProc
         command: fetch.args
+        stdinEnabled: fetch.stdin !== ""
         running: true
-        onStarted: fetch.launched = true
+        onStarted: {
+          fetch.launched = true
+          if (fetch.stdin !== "") {
+            write(fetch.stdin)
+            stdinEnabled = false
+          }
+        }
         onRunningChanged: {
           if (!running && !fetch.launched && !fetch.finished) fetch.complete(null)
         }
@@ -485,6 +505,9 @@ BarWidget {
     Item {
       id: info
       required property string key
+      // "X-Api-Key: …" for a printer with an API key (slice 011), written to
+      // curl's stdin ("-H @-") and closed at once; "" for the others.
+      property string stdin: ""
       required property int seq
       required property var args
       required property int guardMs
@@ -519,8 +542,15 @@ BarWidget {
       Process {
         id: infoProc
         command: info.args
+        stdinEnabled: info.stdin !== ""
         running: true
-        onStarted: info.launched = true
+        onStarted: {
+          info.launched = true
+          if (info.stdin !== "") {
+            write(info.stdin)
+            stdinEnabled = false
+          }
+        }
         onRunningChanged: {
           if (!running && !info.launched && !info.finished) info.complete(null)
         }
@@ -556,6 +586,9 @@ BarWidget {
     Item {
       id: job
       required property string key
+      // "X-Api-Key: …" for a printer with an API key (slice 011), written to
+      // curl's stdin ("-H @-") and closed at once; "" for the others.
+      property string stdin: ""
       required property int seq
       required property var args
       required property int guardMs
@@ -587,14 +620,21 @@ BarWidget {
       }
 
       function tryComplete() {
-        if (exited && drained) complete(Model.parseActionResponse(output, exitCode))
+        if (exited && drained) complete(Model.parseActionResponse(output, exitCode, stdin !== ""))
       }
 
       Process {
         id: commandProc
         command: job.args
+        stdinEnabled: job.stdin !== ""
         running: true
-        onStarted: job.launched = true
+        onStarted: {
+          job.launched = true
+          if (job.stdin !== "") {
+            write(job.stdin)
+            stdinEnabled = false
+          }
+        }
         onRunningChanged: {
           if (!running && !job.launched && !job.finished)
             job.complete(Model.parseActionResponse("", -1))
@@ -747,8 +787,12 @@ BarWidget {
   // false when this widget is on its bar more than once: the shell saves the
   // first entry, which may not be this one (research R1).
   property bool editable: true
+  // The API key field of the selected printer is open (slice 011), and the
+  // reason a key was not saved.
+  property bool keyEditing: false
+  property string keyMessage: ""
   readonly property var setupModel: Model.buildSetupModel(config.printers, discovery, form,
-    panelModel.selected ? panelModel.selected.key : "", editable, saveState.message)
+    panelModel.selected ? panelModel.selected.key : "", editable, saveState.message, keyEditing)
 
   // A successful save; selectKey is the added printer ("" after a removal).
   signal printersSaved(string selectKey)
@@ -778,7 +822,7 @@ BarWidget {
         acceptProcess(sink, r.kind, r.seq, r.ip || "", "", "", -1, false)
         continue
       }
-      processComponent.createObject(holder, { sink: sink, kind: r.kind, seq: r.seq, ip: r.ip || "", args: r.args, guardMs: r.guardMs })
+      processComponent.createObject(holder, { sink: sink, kind: r.kind, seq: r.seq, ip: r.ip || "", args: r.args, stdin: r.stdin || "", guardMs: r.guardMs })
     }
   }
 
@@ -820,6 +864,8 @@ BarWidget {
     stopAll(formHolder)
     form = Model.emptyForm()
     if (!saveState.busy) saveState = { busy: false, message: "" }
+    keyEditing = false
+    keyMessage = ""
   }
 
   function savePrinters(list, selectKey) {
@@ -866,10 +912,10 @@ BarWidget {
     else savePrinters(r.list, r.key)
   }
 
-  function submitForm(address, name) {
+  function submitForm(address, name, apiKey) {
     if (!editable || form.state === "saving") return
     stopAll(formHolder)
-    var r = Model.submitForm(form, Model.rawPrinters(root.settings), address, name, config.timeoutMs / 1000)
+    var r = Model.submitForm(form, Model.rawPrinters(root.settings), address, name, config.timeoutMs / 1000, apiKey || "")
     form = r.form
     if (r.request) run(formHolder, "form", [r.request])
   }
@@ -881,7 +927,7 @@ BarWidget {
 
   function saveFormIfReady() {
     if (form.state !== "saving") return
-    var r = Model.addPrinterToList(Model.rawPrinters(root.settings), form.address, form.name)
+    var r = Model.addPrinterToList(Model.rawPrinters(root.settings), form.address, form.name, form.apiKey || "")
     if (r.error) form = Model.formAfterSave(form, false, r.error)
     else if (!savePrinters(r.list, r.key)) form = Model.formAfterSave(form, false, "")
   }
@@ -895,6 +941,26 @@ BarWidget {
         return
       }
     }
+  }
+
+  // Sets (text) or removes ("") the API key of the printer key, through the
+  // same save as adding and removing.
+  function setApiKey(key, text) {
+    for (var i = 0; i < config.printers.length; i++) {
+      if (config.printers[i].key !== key) continue
+      var r = Model.setPrinterApiKey(Model.rawPrinters(root.settings), config.printers[i].order, text)
+      if (r.error) {
+        keyMessage = r.error
+        return
+      }
+      keyMessage = ""
+      if (savePrinters(r.list, "")) keyEditing = false
+      return
+    }
+  }
+
+  function removeApiKey(key) {
+    setApiKey(key, "")
   }
 
   // The 30 s guard of the search (Model.expireDiscovery).
@@ -937,6 +1003,8 @@ BarWidget {
       required property string ip
       required property var args
       required property int guardMs
+      // "X-Api-Key: …" for a form check with an API key; "" otherwise.
+      property string stdin: ""
 
       property bool finished: false
       property bool launched: false
@@ -970,8 +1038,15 @@ BarWidget {
       Process {
         id: stepProc
         command: step.args
+        stdinEnabled: step.stdin !== ""
         running: true
-        onStarted: step.launched = true
+        onStarted: {
+          step.launched = true
+          if (step.stdin !== "") {
+            write(step.stdin)
+            stdinEnabled = false
+          }
+        }
         onRunningChanged: {
           if (!running && !step.launched && !step.finished) step.complete(-1, false)
         }

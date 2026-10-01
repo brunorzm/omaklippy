@@ -17,7 +17,9 @@ var TEXT = {
   noResponse: "no response",
   networkError: "network error (curl %1)",
   curlNotFound: "curl not found",
-  unauthorized: "unauthorized — allow this computer in trusted_clients",
+  unauthorized: "unauthorized — allow this computer in trusted_clients or set an API key",
+  apiKeyRejected: "API key rejected",
+  invalidApiKey: "invalid API key",
   unexpectedResponse: "unexpected response",
   klipperState: "Klipper: %1",
   unknown: "unknown",
@@ -57,7 +59,8 @@ var TEXT = {
     restartMessage: "Restart the firmware on %1? Klipper and the printer's boards will restart.",
     klipperMessage: "Restart the Klipper service on %1? It will start again on the printer's computer.",
     remove: "Remove",
-    removeMessage: "Remove %1 from the list? You can add it again later."
+    removeMessage: "Remove %1 from the list? You can add it again later.",
+    removeKeyMessage: "Remove the API key of %1? It will need this computer in trusted_clients."
   },
   setup: {
     printers: "Printers…",
@@ -85,7 +88,15 @@ var TEXT = {
     notEditable: "OmaKlippy is on this bar more than once: edit the printers in shell.json.",
     saveFailed: "Could not save the printers: %1",
     shellNotFound: "omarchy-shell not found",
-    shellNoAnswer: "no answer from the shell"
+    shellNoAnswer: "no answer from the shell",
+    apiKey: "API key",
+    apiKeyHint: "API key %1",
+    setApiKey: "Set API key",
+    saveApiKey: "Save",
+    removeApiKey: "Remove API key",
+    needsKey: "needs an API key",
+    checkAgain: "Check again",
+    keyRequired: "%1 needs an API key"
   },
   actionFailed: "%1 failed: %2",
   left: "%1 left",
@@ -304,6 +315,10 @@ function normalizePrinters(list) {
     // An informed web address wins as typed (even on port 7125); an invalid
     // one only hides the button. Without it, the web UI is derived.
     var webText = stringOr(item.webUrl, "").trim()
+    // The Moonraker API key (slice 011): only ever sent to this printer, and
+    // only the hint is shown.
+    var key = normalizeApiKey(item.apiKey)
+    var invalid = baseUrl === "" ? TEXT.invalidAddress : (key.valid ? "" : TEXT.invalidApiKey)
     out.push({
       key: baseUrl + "#" + order,
       order: order,
@@ -311,7 +326,9 @@ function normalizePrinters(list) {
       address: item.address,
       baseUrl: baseUrl,
       webUrl: webText !== "" ? normalizeAddress(webText) : deriveWebUrl(baseUrl),
-      invalidReason: baseUrl === "" ? TEXT.invalidAddress : "",
+      invalidReason: invalid,
+      apiKey: key.valid ? key.key : "",
+      apiKeyHint: key.valid && key.key !== "" ? "\u2026" + key.key.slice(-4) : "",
       displayName: name !== "" ? name : (baseUrl !== "" ? hostOf(baseUrl) : item.address.trim())
     })
   }
@@ -348,6 +365,35 @@ function disambiguateNames(printers) {
 
 function buildQueryUrl(baseUrl) {
   return baseUrl + QUERY_PATH
+}
+
+// A key is visible text (no spaces), at most 256 characters; none is valid.
+function normalizeApiKey(text) {
+  if (text === undefined || text === null) return { key: "", valid: true }
+  if (typeof text !== "string") return { key: "", valid: false }
+  var k = text.trim()
+  if (k === "") return { key: "", valid: true }
+  return /^[\x21-\x7e]{1,256}$/.test(k) ? { key: k, valid: true } : { key: "", valid: false }
+}
+
+// The key goes to curl on stdin ("-H @-" reads the header from there), never
+// in the arguments, which any user of the computer can list. args ends with
+// the URL; the header option goes right before it.
+function keyedRequest(args, apiKey) {
+  if (!Array.isArray(args)) return { args: [], stdin: "" }
+  var k = normalizeApiKey(apiKey)
+  if (!k.valid || k.key === "" || args.length === 0) return { args: args, stdin: "" }
+  var out = args.slice(0, -1).concat(["-H", "@-", args[args.length - 1]])
+  return { args: out, stdin: "X-Api-Key: " + k.key + "\n" }
+}
+
+// Fills request.args (and request.stdin, only with a key, so keyless
+// requests keep the shape they always had).
+function withKey(request, args, apiKey) {
+  var k = keyedRequest(args, apiKey)
+  request.args = k.args
+  if (k.stdin !== "") request.stdin = k.stdin
+  return request
 }
 
 function buildCurlArgs(url, timeoutSec) {
@@ -402,7 +448,7 @@ function planEstimate(statuses, printers, timeoutMs) {
     var updated = copy(st)
     updated.estimate = { filename: file, seconds: null, layerCount: null, pending: true, seq: seq }
     next[p.key] = updated
-    requests.push({ key: p.key, seq: seq, filename: file, args: buildMetadataArgs(p.baseUrl, file, timeoutSec) })
+    requests.push(withKey({ key: p.key, seq: seq, filename: file }, buildMetadataArgs(p.baseUrl, file, timeoutSec), p.apiKey))
   }
   return { statuses: next || statuses, requests: requests }
 }
@@ -471,7 +517,7 @@ function planServiceInfo(statuses, printers, timeoutMs) {
     var updated = copy(st)
     updated.klipperService = { name: null, pending: true, seq: 1 }
     next[p.key] = updated
-    requests.push({ key: p.key, seq: 1, args: buildServiceInfoArgs(p.baseUrl, timeoutSec) })
+    requests.push(withKey({ key: p.key, seq: 1 }, buildServiceInfoArgs(p.baseUrl, timeoutSec), p.apiKey))
   }
   return { statuses: next || statuses, requests: requests }
 }
@@ -534,7 +580,8 @@ var CURL_OFFLINE_MESSAGES = {
 // The curl exit code is checked first (the code line reads 000 without a
 // response), then the HTTP status. Shared by status queries and actions;
 // errorMessage is empty only for a usable 1xx–3xx answer.
-function readTransport(stdout, exitCode) {
+// hasKey: the request carried an API key, so a refusal means the key.
+function readTransport(stdout, exitCode, hasKey) {
   var exit = typeof exitCode === "number" ? exitCode : -1
   var t = { reachable: true, httpStatus: 0, errorMessage: "", data: null }
 
@@ -557,7 +604,7 @@ function readTransport(stdout, exitCode) {
   try { t.data = JSON.parse(body) } catch (e) { t.data = null }
 
   if (t.httpStatus === 401 || t.httpStatus === 403) {
-    t.errorMessage = TEXT.unauthorized
+    t.errorMessage = hasKey === true ? TEXT.apiKeyRejected : TEXT.unauthorized
   } else if (t.httpStatus >= 400 || t.httpStatus === 0) {
     var message = isObject(t.data) && isObject(t.data.error) ? stringOr(t.data.error.message, "") : ""
     t.errorMessage = message || ("HTTP " + t.httpStatus)
@@ -565,9 +612,9 @@ function readTransport(stdout, exitCode) {
   return t
 }
 
-function parseResponse(stdout, exitCode) {
+function parseResponse(stdout, exitCode, hasKey) {
   var r = emptyReading()
-  var t = readTransport(stdout, exitCode)
+  var t = readTransport(stdout, exitCode, hasKey)
   r.reachable = t.reachable
   r.httpStatus = t.httpStatus
   if (t.errorMessage) {
@@ -620,9 +667,9 @@ function readingFromStatus(status) {
 // Any 2xx is success: the body is not checked, the next status query shows
 // what really happened. A timeout may still mean the printer is running the
 // command, so it gets a message of its own and is never retried.
-function parseActionResponse(stdout, exitCode) {
+function parseActionResponse(stdout, exitCode, hasKey) {
   if (exitCode === 28) return { ok: false, message: TEXT.commandTimeout }
-  var t = readTransport(stdout, exitCode)
+  var t = readTransport(stdout, exitCode, hasKey)
   if (t.errorMessage) return { ok: false, message: tidyMessage(t.errorMessage) }
   if (t.httpStatus >= 200 && t.httpStatus < 300) return { ok: true, message: "" }
   return { ok: false, message: "HTTP " + t.httpStatus }
@@ -846,7 +893,7 @@ function planDispatch(statuses, printers, timeoutMs, onlyKey, now) {
     updated.followUp = false
     updated.requestedAt = finiteOrNull(now)
     next[p.key] = updated
-    requests.push({ key: p.key, seq: updated.seq, args: buildCurlArgs(buildQueryUrl(p.baseUrl), timeoutSec) })
+    requests.push(withKey({ key: p.key, seq: updated.seq }, buildCurlArgs(buildQueryUrl(p.baseUrl), timeoutSec), p.apiKey))
   }
   return { statuses: next, requests: requests }
 }
@@ -946,17 +993,11 @@ function planCommand(commands, printer, status, action, timeoutMs, now) {
   var next = copy(isObject(commands) ? commands : {})
   next[printer.key] = entry
   var connectSec = Math.max(1, Math.ceil((finiteOrNull(timeoutMs) || DEFAULT_TIMEOUT_SEC * 1000) / 1000))
-  return {
-    commands: next,
-    request: {
-      key: printer.key,
-      seq: entry.seq,
-      action: action,
-      args: buildActionArgs(printer.baseUrl, action, connectSec,
-        isObject(status.klipperService) ? status.klipperService.name : ""),
-      guardMs: (COMMAND_TIMEOUT_SEC + 1) * 1000
-    }
-  }
+  var request = withKey({ key: printer.key, seq: entry.seq, action: action },
+    buildActionArgs(printer.baseUrl, action, connectSec, isObject(status.klipperService) ? status.klipperService.name : ""),
+    printer.apiKey)
+  request.guardMs = (COMMAND_TIMEOUT_SEC + 1) * 1000
+  return { commands: next, request: request }
 }
 
 function acceptCommandResult(commands, key, seq, result) {
@@ -1500,6 +1541,7 @@ function confirmMessage(action, displayName, filename) {
   if (action === "firmwareRestart") return fill(TEXT.confirm.restartMessage, name)
   if (action === "klipperRestart") return fill(TEXT.confirm.klipperMessage, name)
   if (action === "removePrinter") return fill(TEXT.confirm.removeMessage, name)
+  if (action === "removeApiKey") return fill(TEXT.confirm.removeKeyMessage, name)
   return ""
 }
 
@@ -1507,7 +1549,7 @@ function confirmLabel(action) {
   if (action === "cancel") return TEXT.confirm.cancelPrint
   if (action === "emergencyStop") return TEXT.confirm.stop
   if (action === "firmwareRestart" || action === "klipperRestart") return TEXT.confirm.restart
-  if (action === "removePrinter") return TEXT.confirm.remove
+  if (action === "removePrinter" || action === "removeApiKey") return TEXT.confirm.remove
   return ""
 }
 
@@ -1616,11 +1658,14 @@ function rawPrinters(settings) {
 
 // Returns { list, key, error }: list is the new raw list (null on error) and
 // key the new printer's normalized key (baseUrl#order), known before saving.
-function addPrinterToList(raw, address, name) {
+function addPrinterToList(raw, address, name, apiKey) {
   var src = toList(raw, false)
   var text = typeof address === "string" ? address.trim() : ""
   var baseUrl = normalizeAddress(text)
   if (baseUrl === "") return { list: null, key: "", error: TEXT.invalidAddress }
+  // Older callers pass the printers list here: only a text is a key.
+  var k = normalizeApiKey(typeof apiKey === "string" ? apiKey : "")
+  if (!k.valid) return { list: null, key: "", error: TEXT.invalidApiKey }
   var current = normalizePrinters(src)
   for (var i = 0; i < current.length; i++) {
     // The same host on another port is the same printer: Mainsail's nginx
@@ -1632,6 +1677,7 @@ function addPrinterToList(raw, address, name) {
   var label = typeof name === "string" ? name.trim() : ""
   if (label !== "") item.name = label
   item.address = text
+  if (k.key !== "") item.apiKey = k.key
   var list = src.slice()
   list.push(item)
   return { list: list, key: baseUrl + "#" + current.length, error: "" }
@@ -1651,6 +1697,29 @@ function removePrinterFromList(raw, order) {
     out.push(src[i])
   }
   return out
+}
+
+// Sets (or, with "", removes) the API key of the printer at order; every
+// other item and field stays as it was.
+function setPrinterApiKey(raw, order, apiKey) {
+  var k = normalizeApiKey(apiKey)
+  if (!k.valid) return { list: null, error: TEXT.invalidApiKey }
+  var src = toList(raw, false)
+  var out = []
+  var seen = 0
+  for (var i = 0; i < src.length; i++) {
+    var item = src[i]
+    if (isListItem(item)) {
+      if (seen === order) {
+        item = copy(item)
+        if (k.key !== "") item.apiKey = k.key
+        else delete item.apiKey
+      }
+      seen++
+    }
+    out.push(item)
+  }
+  return { list: out, error: "" }
 }
 
 // The space before the JSON is required: qs ipc (Quickshell 0.3.1) splits an
@@ -1769,6 +1838,18 @@ function parseScan(stdout) {
   return out
 }
 
+// Addresses that answered 401: a Moonraker that wants an API key.
+function parseScanNeedsKey(stdout) {
+  if (typeof stdout !== "string") return []
+  var lines = stdout.split("\n")
+  var out = []
+  for (var i = 0; i < lines.length; i++) {
+    var m = /^https?:\/\/(\d+\.\d+\.\d+\.\d+)(?::\d+)?\/\S*\s+401\s*$/.exec(lines[i])
+    if (m && isIPv4(m[1]) && out.indexOf(m[1]) < 0) out.push(m[1])
+  }
+  return out
+}
+
 function buildReverseArgs(ip) {
   return ["avahi-resolve", "-a", String(ip)]
 }
@@ -1796,8 +1877,11 @@ function parseHostname(stdout, exitCode) {
   return res ? stringOr(res.hostname, "").trim() : ""
 }
 
-function parseMoonrakerCheck(stdout, exitCode) {
-  var t = readTransport(stdout, exitCode)
+// needsKey: refused without a key (the form then asks for one).
+function parseMoonrakerCheck(stdout, exitCode, hasKey) {
+  var t = readTransport(stdout, exitCode, hasKey)
+  if ((t.httpStatus === 401 || t.httpStatus === 403) && hasKey !== true)
+    return { ok: false, message: tidyMessage(t.errorMessage), needsKey: true }
   if (t.errorMessage) return { ok: false, message: tidyMessage(t.errorMessage) }
   var res = isObject(t.data) && isObject(t.data.result) ? t.data.result : null
   if (t.httpStatus >= 200 && t.httpStatus < 300 && res &&
@@ -1908,6 +1992,7 @@ function addCandidates(d, source, candidates, printers) {
       f = copy(found[at])
       if (f.sources.indexOf(source) < 0) f.sources = f.sources.concat([source]).sort()
     }
+    if (c.needsKey === true) f.needsKey = true
     if (source === "mdns") {
       if (!f.mdnsName) f.mdnsName = stringOr(c.name, "")
       if (!f.mdnsHost) f.mdnsHost = stringOr(c.host, "")
@@ -1954,9 +2039,13 @@ function acceptMdns(d, seq, list, launched, printers) {
   return { discovery: discoveryDone(r.discovery), requests: r.requests }
 }
 
-function acceptScan(d, seq, ips, printers) {
+// needsKeyIps: the addresses that answered 401 (they want an API key).
+function acceptScan(d, seq, ips, printers, needsKeyIps) {
   if (!accepting(d, seq)) return unchanged(d)
-  var items = toList(ips, false).filter(isIPv4).map(function(ip) { return { ip: ip } })
+  var nk = toList(needsKeyIps, false).filter(isIPv4)
+  var all = toList(ips, false).filter(isIPv4)
+  for (var i = 0; i < nk.length; i++) if (all.indexOf(nk[i]) < 0) all.push(nk[i])
+  var items = all.map(function(ip) { return nk.indexOf(ip) >= 0 ? { ip: ip, needsKey: true } : { ip: ip } })
   var r = addCandidates(settle(d, "scan"), "scan", items, printers)
   return { discovery: discoveryDone(r.discovery), requests: r.requests }
 }
@@ -1988,7 +2077,7 @@ function acceptHostname(d, seq, ip, name, printers) {
 function acceptDiscoveryOutput(d, kind, seq, ip, stdout, exitCode, launched, printers) {
   if (kind === "nets") return acceptNets(d, seq, parseLocalNets(stdout, exitCode), launched)
   if (kind === "mdns") return acceptMdns(d, seq, parseMdns(stdout), launched, printers)
-  if (kind === "scan") return acceptScan(d, seq, parseScan(stdout), printers)
+  if (kind === "scan") return acceptScan(d, seq, parseScan(stdout), printers, parseScanNeedsKey(stdout))
   if (kind === "reverse") return acceptReverse(d, seq, ip, parseReverse(stdout, exitCode), printers)
   if (kind === "hostname") return acceptHostname(d, seq, ip, parseHostname(stdout, exitCode), printers)
   return unchanged(d)
@@ -2046,18 +2135,18 @@ function foundAddress(found) {
 //      process returns it as { kind, seq, args, guardMs }.
 
 function emptyForm() {
-  return { state: "editing", address: "", name: "", baseUrl: "", message: "", seq: 0, timeoutSec: DEFAULT_TIMEOUT_SEC }
+  return { state: "editing", address: "", name: "", baseUrl: "", message: "", seq: 0, timeoutSec: DEFAULT_TIMEOUT_SEC, apiKey: "" }
 }
 
 function isForm(f) {
   return isObject(f) && typeof f.state === "string"
 }
 
-function submitForm(form, raw, address, name, timeoutSec) {
+function submitForm(form, raw, address, name, timeoutSec, apiKey) {
   var f = isForm(form) ? form : emptyForm()
   var text = typeof address === "string" ? address.trim() : ""
   var label = typeof name === "string" ? name.trim() : ""
-  var check = addPrinterToList(raw, text, label)
+  var check = addPrinterToList(raw, text, label, apiKey)
   var next = copy(f)
   next.address = text
   next.name = label
@@ -2072,8 +2161,9 @@ function submitForm(form, raw, address, name, timeoutSec) {
   next.baseUrl = normalizeAddress(text)
   next.seq = (finiteOrNull(f.seq) || 0) + 1
   next.timeoutSec = t
-  return { form: next, request: { kind: "check", seq: next.seq, ip: "", args: buildCurlArgs(next.baseUrl + "/server/info", t),
-    guardMs: (t + 1) * 1000 } }
+  next.apiKey = normalizeApiKey(apiKey).key
+  return { form: next, request: withKey({ kind: "check", seq: next.seq, ip: "", guardMs: (t + 1) * 1000 },
+    buildCurlArgs(next.baseUrl + "/server/info", t), next.apiKey) }
 }
 
 function hostName(form) {
@@ -2083,6 +2173,12 @@ function hostName(form) {
 function acceptCheck(form, seq, result) {
   if (!isForm(form) || form.state !== "checking" || form.seq !== seq) return { form: form, request: null }
   var next = copy(form)
+  if (isObject(result) && result.needsKey === true) {
+    // A Moonraker that does not trust this computer: ask for its key.
+    next.state = "needsKey"
+    next.message = fill(TEXT.setup.keyRequired, form.address)
+    return { form: next, request: null }
+  }
   if (!isObject(result) || result.ok !== true) {
     next.state = "unreachable"
     next.message = fill(TEXT.setup.noMoonraker, form.address, (isObject(result) && stringOr(result.message, "")) || TEXT.noResponse)
@@ -2093,8 +2189,8 @@ function acceptCheck(form, seq, result) {
     return { form: next, request: null }
   }
   next.state = "naming"
-  return { form: next, request: { kind: "formHostname", seq: seq, ip: "", args: buildHostnameArgs(form.baseUrl, form.timeoutSec),
-    guardMs: (form.timeoutSec + 1) * 1000 } }
+  return { form: next, request: withKey({ kind: "formHostname", seq: seq, ip: "", guardMs: (form.timeoutSec + 1) * 1000 },
+    buildHostnameArgs(form.baseUrl, form.timeoutSec), form.apiKey) }
 }
 
 function acceptFormHostname(form, seq, hostname) {
@@ -2106,7 +2202,7 @@ function acceptFormHostname(form, seq, hostname) {
 }
 
 function addAnyway(form) {
-  if (!isForm(form) || form.state !== "unreachable") return form
+  if (!isForm(form) || (form.state !== "unreachable" && form.state !== "needsKey")) return form
   var next = copy(form)
   next.state = "saving"
   next.message = ""
@@ -2115,7 +2211,8 @@ function addAnyway(form) {
 }
 
 function acceptFormOutput(form, kind, seq, stdout, exitCode) {
-  if (kind === "check") return acceptCheck(form, seq, parseMoonrakerCheck(stdout, exitCode))
+  var hasKey = isForm(form) && stringOr(form.apiKey, "") !== ""
+  if (kind === "check") return acceptCheck(form, seq, parseMoonrakerCheck(stdout, exitCode, hasKey))
   if (kind === "formHostname") return { form: acceptFormHostname(form, seq, parseHostname(stdout, exitCode)), request: null }
   return { form: form, request: null }
 }
@@ -2139,7 +2236,8 @@ function checkingText(form) {
 
 // ---- Setup screen
 
-function buildSetupModel(printers, discovery, form, selectedKey, editable, saveMessage) {
+// keyEditing: the API key field of the selected printer is open (panel state).
+function buildSetupModel(printers, discovery, form, selectedKey, editable, saveMessage, keyEditing) {
   var list = Array.isArray(printers) ? printers : []
   var d = isDiscovery(discovery) ? discovery : emptyDiscovery()
   var f = isForm(form) ? form : emptyForm()
@@ -2149,7 +2247,8 @@ function buildSetupModel(printers, discovery, form, selectedKey, editable, saveM
   for (var i = 0; i < d.found.length; i++) {
     var x = d.found[i]
     if (!isObject(x)) continue
-    results.push({ ip: x.ip, name: x.name, address: x.address, added: isFoundAdded(x, list), ready: !(x.pending > 0) })
+    results.push({ ip: x.ip, name: x.name, address: x.address, added: isFoundAdded(x, list), ready: !(x.pending > 0),
+      needsKey: x.needsKey === true })
   }
   var notices = []
   if (!canEdit) notices.push(TEXT.setup.notEditable)
@@ -2158,9 +2257,12 @@ function buildSetupModel(printers, discovery, form, selectedKey, editable, saveM
   if (d.noLocalNetwork) notices.push(TEXT.setup.noLocalNetwork)
   var removeKey = ""
   var removeName = ""
+  var hint = ""
   if (typeof selectedKey === "string" && selectedKey !== "") {
     for (var j = 0; j < list.length; j++) {
-      if (isObject(list[j]) && list[j].key === selectedKey) { removeKey = list[j].key; removeName = list[j].displayName }
+      if (isObject(list[j]) && list[j].key === selectedKey) {
+        removeKey = list[j].key; removeName = list[j].displayName; hint = stringOr(list[j].apiKeyHint, "")
+      }
     }
   }
   return {
@@ -2177,7 +2279,12 @@ function buildSetupModel(printers, discovery, form, selectedKey, editable, saveM
     formState: f.state,
     formText: checkingText(f),
     formBusy: f.state === "checking" || f.state === "naming" || f.state === "saving",
-    showAddAnyway: f.state === "unreachable",
+    showAddAnyway: f.state === "unreachable" || f.state === "needsKey",
+    formNeedsKey: f.state === "needsKey",
+    hasKey: hint !== "",
+    apiKeyHint: hint,
+    apiKeyHintText: hint !== "" ? fill(TEXT.setup.apiKeyHint, hint) : "",
+    keyEditing: keyEditing === true && removeKey !== "",
     saveMessage: stringOr(saveMessage, "")
   }
 }
@@ -2194,8 +2301,13 @@ function setupCursorStops(setupModel, empty) {
       if (isObject(results[i]) && !results[i].added && results[i].ready) stops.push("add:" + results[i].ip)
     }
     stops.push("address", "name", "submit")
+    if (m.formNeedsKey) stops.push("formKey", "checkAgain")
     if (m.showAddAnyway) stops.push("addAnyway")
-    if (m.removeKey) stops.push("remove")
+    if (m.removeKey) {
+      stops.push("remove", "setKey")
+      if (m.hasKey) stops.push("removeKey")
+      if (m.keyEditing) stops.push("keyField", "saveKey")
+    }
   }
   if (empty !== true) stops.push("back")
   return stops
@@ -2251,8 +2363,8 @@ function parseLiveMessage(text) {
   if (id === null) return out
   if (isObject(data.error)) {
     out.kind = "error"; out.id = id; out.message = stringOr(data.error.message, "")
-  } else if (isObject(data.result) && isObject(data.result.status)) {
-    out.kind = "result"; out.id = id; out.status = data.result.status
+  } else if (isObject(data.result)) {
+    out.kind = "result"; out.id = id; out.status = isObject(data.result.status) ? data.result.status : null
   }
   return out
 }
@@ -2291,9 +2403,23 @@ var LIVE_PING_MS = 5000
 var LIVE_DEAD_MS = 9000
 var LIVE_RETRY_MAX_SEC = 30
 
-function emptyLive(url) {
-  return { state: "idle", url: stringOr(url, ""), attempt: 0, retryAt: null, lastFrameAt: null, lastPingAt: null,
+// With an API key (slice 011) the entry also tracks the identify request
+// that must succeed before subscribing.
+function emptyLive(url, apiKey) {
+  var e = { state: "idle", url: stringOr(url, ""), attempt: 0, retryAt: null, lastFrameAt: null, lastPingAt: null,
     subscribeId: 0, buffer: null, dirty: false, urgent: false }
+  var k = normalizeApiKey(apiKey)
+  if (k.valid && k.key !== "") { e.apiKey = k.key; e.identifyId = 0; e.keyRejected = false }
+  return e
+}
+
+var PLUGIN_VERSION = "0.11.0"
+var PLUGIN_URL = "https://github.com/brunorzm/omaklippy"
+
+function buildIdentifyMessage(id, apiKey, version) {
+  return JSON.stringify({ jsonrpc: "2.0", method: "server.connection.identify", id: finiteOrNull(id) || 0,
+    params: { client_name: "OmaKlippy", version: stringOr(version, PLUGIN_VERSION), type: "other", url: PLUGIN_URL,
+      api_key: stringOr(apiKey, "") } })
 }
 
 function isLives(lives) {
@@ -2314,8 +2440,9 @@ function reconcileLives(lives, printers) {
     var url = liveUrl(p.baseUrl)
     if (url === "") continue
     count++
-    if (isObject(prev[p.key]) && prev[p.key].url === url) next[p.key] = prev[p.key]
-    else { next[p.key] = emptyLive(url); changed = true }
+    var key = stringOr(p.apiKey, "")
+    if (isObject(prev[p.key]) && prev[p.key].url === url && stringOr(prev[p.key].apiKey, "") === key) next[p.key] = prev[p.key]
+    else { next[p.key] = emptyLive(url, key); changed = true }
   }
   var before = 0
   for (var k in prev) before++
@@ -2389,6 +2516,14 @@ function liveOpened(lives, key, now) {
   n.subscribeId = (finiteOrNull(n.subscribeId) || 0) + 1
   n.lastFrameAt = finiteOrNull(now)
   n.lastPingAt = finiteOrNull(now)
+  if (n.apiKey) {
+    // Identify with the key first; the subscription waits for its answer.
+    n.identifyId = n.subscribeId
+    n.keyRejected = false
+    out.lives = withLive(lives, key, n)
+    out.actions.push({ key: key, type: "send", text: buildIdentifyMessage(n.identifyId, n.apiKey) })
+    return out
+  }
   out.lives = withLive(lives, key, n)
   out.actions.push({ key: key, type: "send", text: buildSubscribeMessage(n.subscribeId) })
   return out
@@ -2404,7 +2539,17 @@ function liveMessage(lives, key, parsed, now) {
   var n = copy(e)
   n.lastFrameAt = finiteOrNull(now)
   var k = parsed.kind
-  if ((k === "result" || k === "error") && parsed.id === e.subscribeId) {
+  if ((k === "result" || k === "error") && e.identifyId && parsed.id === e.identifyId) {
+    n.identifyId = 0
+    if (k === "result") {
+      n.subscribeId = (finiteOrNull(e.subscribeId) || 0) + 1
+      out.actions.push({ key: key, type: "send", text: buildSubscribeMessage(n.subscribeId) })
+    } else {
+      // The key was refused: polling shows "API key rejected"; no retries
+      // until the connection or the key changes.
+      n.keyRejected = true
+    }
+  } else if ((k === "result" || k === "error") && parsed.id === e.subscribeId) {
     if (k === "result" && isObject(parsed.status)) {
       n.state = "subscribed"
       n.buffer = parsed.status
@@ -2430,7 +2575,7 @@ function liveMessage(lives, key, parsed, now) {
     n.dirty = false
     n.urgent = false
     out.left = true
-  } else if (k === "klippyReady") {
+  } else if (k === "klippyReady" && !e.keyRejected && !e.identifyId) {
     n.subscribeId = (finiteOrNull(e.subscribeId) || 0) + 1
     out.actions.push({ key: key, type: "send", text: buildSubscribeMessage(n.subscribeId) })
   }
@@ -2652,6 +2797,11 @@ if (typeof module !== "undefined") {
     leaveLive: leaveLive,
     afterCommand: afterCommand,
     liveWarning: liveWarning,
+    normalizeApiKey: normalizeApiKey,
+    keyedRequest: keyedRequest,
+    buildIdentifyMessage: buildIdentifyMessage,
+    setPrinterApiKey: setPrinterApiKey,
+    parseScanNeedsKey: parseScanNeedsKey,
     stepCursor: stepCursor
   }
 }

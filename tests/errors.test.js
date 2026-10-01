@@ -42,7 +42,7 @@ test("curl that could not start → error 'curl not found'", () => {
 })
 
 test("401/403 → error with the trusted_clients hint", () => {
-  const msg = "unauthorized — allow this computer in trusted_clients"
+  const msg = "unauthorized — allow this computer in trusted_clients or set an API key"
   assert.equal(parse("unauthorized.synthetic").errorMessage, msg)
   assert.equal(M.parseResponse('{"error":{"code":403,"message":"Forbidden"}}\n403', 0).errorMessage, msg)
   assert.deepEqual(M.deriveState(parse("unauthorized.synthetic")), { state: "error", reason: msg })
@@ -129,7 +129,7 @@ test("real Biqu capture with Klipper stopped (503 + traceback) → error 'Klippy
 test("real Biqu capture outside trusted_clients (401 + traceback) → error with the hint", () => {
   const r = parse("unauthorized")
   assert.equal(r.httpStatus, 401)
-  assert.equal(M.deriveState(r).reason, "unauthorized — allow this computer in trusted_clients")
+  assert.equal(M.deriveState(r).reason, "unauthorized — allow this computer in trusted_clients or set an API key")
 })
 
 test("real Voron FIRMWARE_RESTART sequence: 'Klippy Disconnected' 503, then startup", () => {

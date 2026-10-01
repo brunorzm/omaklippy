@@ -123,3 +123,12 @@ in the same `{ exitCode, stdout }` format.
   notifications when Klipper goes away and comes back (from the Moonraker docs).
 - `ws-proc-stat.synthetic.json`: a `notify_proc_stat_update`, trimmed (the real one, about once a
   second, also carries the traffic counters of every network interface of the printer's computer).
+
+## API key fixtures (slice 011)
+
+- `server-info-unauthorized.synthetic.json`: `GET /server/info` refused (401) by a Moonraker that
+  does not trust this computer and got no `X-Api-Key` (or a wrong one). Body as Moonraker v0.10/v0.11
+  sends it (`authorization.py`, `authenticate_request`).
+- `ws-identify-ok.synthetic.json`, `ws-identify-error.synthetic.json` (websocket messages, the
+  `{ "message": … }` shape): the answer to `server.connection.identify` with a valid API key
+  (`connection_id`) and with a wrong one (401).
