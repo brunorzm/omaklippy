@@ -105,3 +105,10 @@ painel (Set API key) e tirou (Remove API key):
 Testes puros: `buildSaveArgs`/`parseSaveResult` não existem mais; `buildSaveEntry` preserva as outras
 configurações e não leva `id`; `entryChanged`; nenhum argv construído pelo modelo para uma impressora
 com chave (consultas, estimativa, comando, navegador, notificação) contém a chave.
+
+Remover e reinstalar (depois do push de `bb23864`, com cópia da pasta no scratchpad): `omarchy plugin
+remove --yes` (rodado pelo usuário) apagou a pasta e a entrada no `shell.json`; 0 conexões e nenhum
+`curl` sobrando. Reinstalado do GitHub (`bb23864`): a instalação limpa trouxe só os arquivos do
+plugin e a constituição, sem `.claude/` nem o resto do `.specify/` (o ferramental de desenvolvimento
+não vai para quem instala); essas pastas foram restauradas da cópia (pasta idêntica a ela),
+`shell.json` restaurado do backup, shell reiniciado: 4 conexões (dois monitores), nenhum erro no log.
