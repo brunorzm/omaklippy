@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\":{\"system_info\":{\"provider\":\"systemd_dbus\",\"instance_ids\":{\"moonraker\":\"moonraker\",\"klipper\":\"klipper\"},\"available_services\":[\"moonraker-obico\",\"crowsnest\",\"klipper\",\"moonraker\",\"klipper-mcu\"],\"service_state\":{\"moonraker-obico\":{\"active_state\":\"active\",\"sub_state\":\"running\"},\"crowsnest\":{\"active_state\":\"active\",\"sub_state\":\"running\"},\"klipper\":{\"active_state\":\"active\",\"sub_state\":\"running\"},\"moonraker\":{\"active_state\":\"active\",\"sub_state\":\"running\"},\"klipper-mcu\":{\"active_state\":\"active\",\"sub_state\":\"running\"}}}}}\n200"
+}

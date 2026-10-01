@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\":{\"system_info\":{\"provider\":\"none\",\"instance_ids\":{\"moonraker\":\"moonraker\"},\"available_services\":[],\"service_state\":{}}}}\n200"
+}

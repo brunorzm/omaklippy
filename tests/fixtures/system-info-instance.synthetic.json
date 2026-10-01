@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"result\":{\"system_info\":{\"provider\":\"systemd_dbus\",\"instance_ids\":{\"moonraker\":\"moonraker-1\",\"klipper\":\"klipper-1\"},\"available_services\":[\"klipper-1\",\"moonraker-1\"],\"service_state\":{}}}}\n200"
+}

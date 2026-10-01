@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\"error\":{\"code\":400,\"message\":\"Service 'klipper' not allowed\"}}\n400"
+}
