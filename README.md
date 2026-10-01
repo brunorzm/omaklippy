@@ -107,6 +107,18 @@ omarchy plugin add https://github.com/brunorzm/omaklippy.git --enable
 Or copy the folder to `~/.config/omarchy/plugins/io.github.brunorzm.omaklippy/` and run
 `omarchy plugin enable io.github.brunorzm.omaklippy`.
 
+## Remove
+
+```bash
+omarchy plugin remove io.github.brunorzm.omaklippy
+```
+
+This deletes the plugin folder and the widget's entry in `~/.config/omarchy/shell.json`, **printers
+(and their API keys) included**; copy the `printers` list from `shell.json` first if you may come
+back. The plugin creates no other files, so nothing else is left behind. To keep it installed but
+off the bar, use `omarchy plugin disable io.github.brunorzm.omaklippy` (it also removes the widget's
+entry, see the heads-up under Configuration).
+
 ## Adding printers
 
 Open the panel and press **Printers…** (a panel without printers opens straight on this screen):
@@ -279,11 +291,13 @@ omarchy-shell shell hide io.github.brunorzm.omaklippy          # close the panel
 - Tests: `node --test tests/`. Sample responses live in `tests/fixtures/` (see the README there to
   capture new ones from a real printer).
 - Validation: `omarchy plugin validate .` and
-  `qmllint -I "$OMARCHY_PATH/shell" BarWidget.qml Panel.qml`.
+  `qmllint -I "$OMARCHY_PATH/shell" BarWidget.qml Panel.qml LiveConnection.qml`.
 - The shell's hot reload does not reliably reload a third-party plugin (including files created
   after the first load). After changing code, run `omarchy-restart-shell`. Settings changes do
   not need it.
-- Specs, plan and design notes for each feature are in `specs/` (Spec Kit, written in Portuguese).
+- Specs, plan and design notes for each feature are in `specs/` (Spec Kit, written in Portuguese),
+  checked against `.specify/memory/constitution.md`. The Spec Kit and Claude Code tooling itself
+  stays out of the repository.
 
 ## License
 

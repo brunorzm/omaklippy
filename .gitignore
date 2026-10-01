@@ -7,3 +7,12 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+
+# Spec Kit and Claude Code tooling: kept locally, out of the published plugin
+# (an installed plugin is a clone of this repository). Only the constitution,
+# which every plan in specs/ checks against, is shared.
+.claude/
+.specify/*
+!.specify/memory/
+.specify/memory/*
+!.specify/memory/constitution.md

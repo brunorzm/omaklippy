@@ -39,6 +39,9 @@ refusing to restart a service that is not in its allowed list (slice 008).
 answers are trimmed to these fields before they become fixtures: the rest carries IP addresses and
 serial numbers, and the repository is public.
 
+The user names in the printers' paths (Moonraker tracebacks, file paths in metadata) are replaced
+by a generic `pi` (`/home/pi/...`): the repository is public.
+
 ## Capture from a real printer
 
 ```bash
