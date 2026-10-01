@@ -71,4 +71,8 @@ dois monitores) e `hide` (painel fechado); `disable` apagou a entrada do `shell.
 `avahi-browse` ou `avahi-resolve` sobrando; `enable` recriou a entrada sem as impressoras
 (`{"id": "io.github.brunorzm.omaklippy"}`), restauradas copiando o backup (arquivo idêntico); shell
 reiniciado sem erros no log e sem processos sobrando, `shell.json` ainda idêntico ao backup.
-`remove`/reinstalar: pendente, depois do push.
+Remover (2026-10-01, depois do push de `bc4782e`, com cópia da pasta no scratchpad): `omarchy plugin
+remove --yes` (rodado pelo usuário) apagou a pasta e a entrada no `shell.json`; nenhum `curl`,
+`avahi-browse` ou `avahi-resolve` sobrando. Reinstalado do GitHub (`bc4782e`, conteúdo igual ao da
+cópia), `.specify/feature.json` restaurado, `shell.json` restaurado do backup (Voron e Biqu B1),
+shell reiniciado sem erros no log.

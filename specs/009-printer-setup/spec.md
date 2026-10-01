@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Draft
+**Status**: Concluída em 2026-10-01 (Voron e Biqu B1 achadas pela busca na rede real, Biqu removida e readicionada pela busca e pelo endereço; ver [hardware-test.md](./hardware-test.md))
 
 **Input**: User description: "cadastrar impressoras pelo painel (sem editar o shell.json) + descoberta automática na rede (mDNS)"
 

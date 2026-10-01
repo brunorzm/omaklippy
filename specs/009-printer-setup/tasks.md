@@ -124,9 +124,9 @@ da configuração.
 - [X] T021 [P] Atualizar `README.md`: cadastro pelo painel (Printers…, Search network, Add by address, Remove), o que a busca faz (anúncio + verificação da rede local na porta 7125, só GET, só a pedido, sem VPN, até 30 s), o nome que a impressora adicionada recebe, como ligar o anúncio no Moonraker (`[zeroconf]`) para ela aparecer pelo anúncio, binários novos (`omarchy-shell`, `ip`, `avahi-browse`/`avahi-resolve` opcionais) na tabela de dependências com o que cada ausência desliga, e tirar o comando para copiar
 - [X] T022 [P] Em `manifest.json`, `version` de `0.8.0` para `0.9.0`
 - [X] T023 [P] Auditorias: Princípio VIII (nenhuma cor/tamanho fixo novo), I (nenhum symlink, manifesto válido) e III (binários novos só os do README; nenhuma escrita de arquivo pelo plugin; a busca só com GET)
-- [ ] T024 Ciclo de vida ([quickstart §4](./quickstart.md#4-ciclo-de-vida-princípio-vi)): clique e Escape (fora e dentro de um campo de texto) pelo usuário; summon/hide, disable/enable (restaurar as impressoras depois do enable) e reinício do shell por comando, sem `curl`/`avahi`/`omarchy-shell` sobrando; `remove`/reinstalar só depois do push, com cópia da pasta e `.specify/feature.json` restaurado
+- [X] T024 Ciclo de vida ([quickstart §4](./quickstart.md#4-ciclo-de-vida-princípio-vi)): clique e Escape (fora e dentro de um campo de texto) pelo usuário; summon/hide, disable/enable (restaurar as impressoras depois do enable) e reinício do shell por comando, sem `curl`/`avahi`/`omarchy-shell` sobrando; `remove`/reinstalar só depois do push, com cópia da pasta e `.specify/feature.json` restaurado
 - [X] T025 Registrar em `specs/009-printer-setup/hardware-test.md` (Princípio VII): tempo da busca real, o que achou, a entrada do OmaKlippy no `shell.json` antes e depois de cada gravação, versões
-- [ ] T026 Marcar a fatia como concluída no `spec.md` só depois de T024 (com remove/reinstalar) e T025
+- [X] T026 Marcar a fatia como concluída no `spec.md` só depois de T024 (com remove/reinstalar) e T025
 
 ---
 
