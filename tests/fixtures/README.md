@@ -79,3 +79,26 @@ printer's owner during the slice 002 hardware test.
 `{ exitCode, stdout }` format, captured from the Voron (Moonraker v0.11) on 2026-09-30:
 `metadata-ok.json` (OrcaSlicer file, `estimated_time` 1343) and `metadata-missing.json` (a file
 that does not exist: HTTP 404 "Metadata not available"). This request only reads.
+
+## Printer setup fixtures (slice 009)
+
+These are not Moonraker status queries; each is the output of one command the printer setup runs,
+in the same `{ exitCode, stdout }` format.
+
+- `ip-addr.synthetic.json`: `ip -j -4 addr show` in this computer's format, with the addresses
+  replaced by examples: `lo`, `wlp7s0` 192.168.1.21/24 (the only one searched), `tailscale0`
+  100.64.0.5/32 and `docker0` 172.17.0.1/16.
+- `avahi-moonraker.synthetic.json`: `avahi-browse -rtp _moonraker._tcp` in the real parseable
+  format (checked against another service on the network; neither printer announces itself), with
+  two printers, one named `My\032Printer` (avahi's decimal escape for a space), and an IPv6 line.
+- `scan.synthetic.json`: the network check (one `curl --parallel` over the /24), in the measured
+  format: `200` for 192.168.1.100 and .110, `000` for the rest. Exit code 7, as curl returns the
+  error of the last address even when others answered.
+- `printer-info-voron.json`, `server-info-voron.json`: real Voron answers to `GET /printer/info`
+  and `GET /server/info` (2026-10-01), trimmed to `state`, `hostname`, `software_version` and to
+  `klippy_state`, `moonraker_version` (the rest carries paths with the printer's user name).
+- `printer-info-disconnected.synthetic.json`: `/printer/info` while Klipper is disconnected (503).
+- `server-info-not-moonraker.synthetic.json`: a 200 from something that is not Moonraker.
+- `set-widget-ok.json`, `set-widget-error.synthetic.json`: the stdout of `omarchy-shell shell
+  setBarWidget …` when the shell saves (`ok`) and when it refuses (`could not find widget …`; the
+  command exits 0 in both cases).

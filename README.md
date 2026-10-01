@@ -100,10 +100,42 @@ omarchy plugin add https://github.com/brunorzm/omaklippy.git --enable
 Or copy the folder to `~/.config/omarchy/plugins/io.github.brunorzm.omaklippy/` and run
 `omarchy plugin enable io.github.brunorzm.omaklippy`.
 
+## Adding printers
+
+Open the panel and press **Printers…** (a panel without printers opens straight on this screen):
+
+- **Search network** looks for printers on this computer's local network, only when you press
+  it: Moonraker announcements (mDNS), plus a check of every address of the local /24 on port
+  7125 (`GET /server/info`, one `curl` for the whole network, 64 at a time). VPN, container and
+  bridge interfaces are skipped. It takes a few seconds and gives up after 30 s; **Cancel**, Escape
+  or closing the panel stops it. Each printer found shows its name and address, and **Add** saves
+  it (**Added** when it is already in your list, by name or by IP).
+- A printer found is saved with the name its computer gives itself (`GET /printer/info`), or its
+  announced name, or its name on the network (`voron.local` → `voron`), or the IP; and with its
+  name on the network (or the IP) and the port that answered, e.g. `voron.local:7125`.
+- **Add by address** takes an address (same forms as in the configuration) and an optional name.
+  The plugin first checks that a Moonraker answers there; if none does, it says why and offers
+  **Add anyway**. Without a name, the printer's own name (or the host) is used. An address
+  already in the list is refused.
+- **Remove <name>** removes the printer selected in the panel, after a confirmation.
+
+The shell saves the list (`omarchy-shell shell setBarWidget`, the same method `omarchy bar set`
+uses), keeping every other field of your printers (`webUrl`, names) as it was. If OmaKlippy is on
+the same bar more than once, the panel cannot tell which entry is its own and asks you to edit
+`shell.json` instead.
+
+For a printer to show up through announcements too, turn them on in its `moonraker.conf`:
+
+```ini
+[zeroconf]
+```
+
+Without it the network check still finds it.
+
 ## Configuration
 
 Settings live on the widget's entry in `~/.config/omarchy/shell.json` and apply right away,
-without restarting.
+without restarting. Printers can be added and removed from the panel (above) or here.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -157,7 +189,9 @@ The plugin calls `GET /printer/objects/query` for status, `GET /server/files/met
 print for the slicer's estimate and, when you use the panel's buttons,
 `POST /printer/print/pause`, `/printer/print/resume`, `/printer/print/cancel`,
 `/printer/emergency_stop`, `/printer/firmware_restart` and `/machine/services/restart`, and
-`GET /machine/system_info` once when Klipper disconnects (for its service name), all without authentication. Your computer has to be allowed in
+`GET /machine/system_info` once when Klipper disconnects (for its service name), and, from the
+**Printers…** screen only, `GET /server/info` and `GET /printer/info` (to find a printer and its
+name), all without authentication. Your computer has to be allowed in
 `moonraker.conf` (for status and for commands):
 
 ```ini
@@ -175,6 +209,9 @@ Otherwise the printer shows as "error: unauthorized — allow this computer in t
 | `curl` | required, at runtime | Polls each printer's Moonraker and sends the panel's commands (`POST`), always with a timeout (`--connect-timeout`/`--max-time`; 60 s total for commands). Without it, every printer shows as "error: curl not found" and commands fail with "curl not found". |
 | `notify-send` | optional, for the notifications | Sends the desktop notifications to the shell's notification service. Part of `libnotify`. Run without a shell, with a 10 s guard. Without it, the panel shows "Notifications unavailable: notify-send not found"; everything else keeps working. |
 | `omarchy-launch-browser` | required at runtime, for **Open web UI** only | Opens the web UI in the default browser, the way Omarchy does (its own systemd unit, window focused). Part of the `omarchy` package. Run without a shell, with a 10 s guard. Without it, the button shows "Open web UI failed: omarchy-launch-browser not found"; everything else keeps working. |
+| `omarchy-shell` | required, to add or remove printers from the panel | Asks the shell to save the new printer list (`omarchy-shell shell setBarWidget …`). Part of the `omarchy` package. Run without a shell, with a 5 s guard. Without it, adding and removing show "Could not save the printers: omarchy-shell not found"; everything else keeps working. |
+| `ip` | required, for the network check in **Search network** | Lists this computer's local networks (`ip -j -4 addr show`). Part of `iproute2`. Without it, the search uses announcements only and says so. |
+| `avahi-browse`, `avahi-resolve` | optional, for **Search network** | Read Moonraker announcements (`avahi-browse -rtp _moonraker._tcp`) and the name on the network of each printer found (`avahi-resolve -a`). Part of `avahi`. Without them, the search uses the network check only (and says so) and printers found are saved by IP. |
 | `node` | development only | Runs the tests for the pure logic (`node --test tests/`). |
 
 No other external binary is ever run.
@@ -185,6 +222,8 @@ No other external binary is ever run.
 - No `sudo`, no install scripts, no daemons or services.
 - Creates no files outside its own folder. Settings live on the widget's entry in
   `~/.config/omarchy/shell.json`, written by the shell itself.
+- Searches the local network only when you press **Search network**, with `GET` requests to
+  Moonraker's info endpoints only.
 - Reads (`GET`) the status of the printers you add, and sends a command (`POST`) only when you
   press one of the panel's buttons (Cancel, Emergency stop, Restart firmware and Restart Klipper only after you confirm).
 - Opens your default browser only when you press **Open web UI**.

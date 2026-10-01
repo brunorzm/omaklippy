@@ -249,6 +249,7 @@ BarWidget {
   function panelOpened() {
     now = Date.now()
     refreshNotifyWarning()
+    refreshEditable()
   }
 
   function injectPanel() {
@@ -266,7 +267,10 @@ BarWidget {
   onBarChanged: injectPanel()
   onSettingsChanged: injectPanel()
   onStatusesChanged: if (opened) now = Date.now()
-  onConfigChanged: syncConfig()
+  onConfigChanged: {
+    syncConfig()
+    applyPendingSelection()
+  }
   Component.onCompleted: {
     registerSelf()
     syncConfig()
@@ -275,6 +279,9 @@ BarWidget {
   Component.onDestruction: {
     unregisterSelf()
     stopRequests(false)
+    stopAll(discoveryHolder)
+    stopAll(formHolder)
+    stopAll(saveHolder)
   }
 
   Timer {
@@ -711,6 +718,283 @@ BarWidget {
         interval: note.guardMs
         running: true
         onTriggered: note.complete(Model.parseNotifyResult(-2, true))
+      }
+    }
+  }
+
+  // ---- Printer setup (slice 009). The shell saves the list (Model.buildSaveArgs);
+  //      the search and the add-by-address form are Model state machines whose
+  //      requests run here as processes, each in its own holder so a config
+  //      change (stopRequests) never cuts them short.
+  property var discovery: Model.emptyDiscovery()
+  property var form: Model.emptyForm()
+  // { busy, message }: one save at a time; message is the last failure.
+  property var saveState: ({ busy: false, message: "" })
+  property int saveSeq: 0
+  // The printer to select once the saved list comes back through settings,
+  // and the one the running save adds (pendingSelectKey is cleared as soon
+  // as the list arrives, which can be before the shell answers).
+  property string pendingSelectKey: ""
+  property string saveSelectKey: ""
+  // false when this widget is on its bar more than once: the shell saves the
+  // first entry, which may not be this one (research R1).
+  property bool editable: true
+  readonly property var setupModel: Model.buildSetupModel(config.printers, discovery, form,
+    panelModel.selected ? panelModel.selected.key : "", editable, saveState.message)
+
+  // A successful save; selectKey is the added printer ("" after a removal).
+  signal printersSaved(string selectKey)
+
+  // The bar window this instance sits in: moduleWidgets lists every live
+  // instance, one per monitor, so only those in the same window count.
+  readonly property var hostWindow: Window.window
+
+  function refreshEditable() {
+    var items = root.bar && typeof root.bar.moduleWidgets === "function" ? root.bar.moduleWidgets(root.moduleName) : []
+    var here = 0
+    for (var i = 0; i < items.length; i++) if (items[i] && items[i].hostWindow === root.hostWindow) here++
+    editable = here <= 1
+  }
+
+  function stopAll(holder) {
+    var list = holder.children
+    for (var i = list.length - 1; i >= 0; i--) list[i].stop()
+  }
+
+  function run(holder, sink, requests) {
+    for (var i = 0; i < requests.length; i++) {
+      var r = requests[i]
+      // Nothing to run counts as a binary that never started, so the
+      // machine still gets its one answer.
+      if (r.args.length === 0) {
+        acceptProcess(sink, r.kind, r.seq, r.ip || "", "", "", -1, false)
+        continue
+      }
+      processComponent.createObject(holder, { sink: sink, kind: r.kind, seq: r.seq, ip: r.ip || "", args: r.args, guardMs: r.guardMs })
+    }
+  }
+
+  // Every setup process ends here, exactly once.
+  function acceptProcess(sink, kind, seq, ip, stdout, stderr, exitCode, launched) {
+    if (sink === "discovery") {
+      var d = Model.acceptDiscoveryOutput(discovery, kind, seq, ip, stdout, exitCode, launched, config.printers)
+      discovery = d.discovery
+      run(discoveryHolder, "discovery", d.requests)
+      if (discovery.state !== "running") discoveryGuard.stop()
+    } else if (sink === "form") {
+      var f = Model.acceptFormOutput(form, kind, seq, stdout, exitCode)
+      form = f.form
+      if (f.request) run(formHolder, "form", [f.request])
+      saveFormIfReady()
+    } else if (sink === "save") {
+      acceptSave(seq, Model.parseSaveResult(stdout, exitCode, launched, stderr))
+    }
+  }
+
+  function startDiscovery() {
+    if (!editable) return
+    stopAll(discoveryHolder)
+    var r = Model.startDiscovery(discovery, Date.now(), config.timeoutMs / 1000)
+    discovery = r.discovery
+    run(discoveryHolder, "discovery", r.requests)
+    discoveryGuard.restart()
+  }
+
+  function cancelDiscovery() {
+    stopAll(discoveryHolder)
+    discoveryGuard.stop()
+    if (discovery.state === "running") discovery = Model.cancelDiscovery(discovery)
+  }
+
+  // Closing the panel: the search stops and the form starts over next time.
+  function resetSetup() {
+    cancelDiscovery()
+    stopAll(formHolder)
+    form = Model.emptyForm()
+    if (!saveState.busy) saveState = { busy: false, message: "" }
+  }
+
+  function savePrinters(list, selectKey) {
+    if (saveState.busy || !editable) return false
+    saveSeq += 1
+    pendingSelectKey = String(selectKey || "")
+    saveSelectKey = pendingSelectKey
+    saveState = { busy: true, message: "" }
+    run(saveHolder, "save", [{ kind: "save", seq: saveSeq, args: Model.buildSaveArgs(list), guardMs: Model.SAVE_TIMEOUT_MS }])
+    return true
+  }
+
+  function acceptSave(seq, result) {
+    if (seq !== saveSeq) return
+    saveState = { busy: false, message: result.ok ? "" : Model.fill(Model.TEXT.setup.saveFailed, result.message) }
+    form = Model.formAfterSave(form, result.ok, "")
+    if (!result.ok) {
+      pendingSelectKey = ""
+      return
+    }
+    // The new list may already be here (the shell tells the widgets before
+    // its IPC answer arrives, as seen live) or come right after.
+    applyPendingSelection()
+    printersSaved(saveSelectKey)
+  }
+
+  function applyPendingSelection() {
+    if (pendingSelectKey === "") return
+    for (var i = 0; i < config.printers.length; i++) {
+      if (config.printers[i].key === pendingSelectKey) {
+        selectPrinter(pendingSelectKey)
+        pendingSelectKey = ""
+        return
+      }
+    }
+  }
+
+  function addFound(ip) {
+    var found = null
+    for (var i = 0; i < discovery.found.length; i++) if (discovery.found[i].ip === ip) found = discovery.found[i]
+    if (!found || found.added) return
+    var r = Model.addPrinterToList(Model.rawPrinters(root.settings), Model.foundAddress(found), found.name)
+    if (r.error) saveState = { busy: false, message: Model.fill(Model.TEXT.setup.saveFailed, r.error) }
+    else savePrinters(r.list, r.key)
+  }
+
+  function submitForm(address, name) {
+    if (!editable || form.state === "saving") return
+    stopAll(formHolder)
+    var r = Model.submitForm(form, Model.rawPrinters(root.settings), address, name, config.timeoutMs / 1000)
+    form = r.form
+    if (r.request) run(formHolder, "form", [r.request])
+  }
+
+  function addAnyway() {
+    form = Model.addAnyway(form)
+    saveFormIfReady()
+  }
+
+  function saveFormIfReady() {
+    if (form.state !== "saving") return
+    var r = Model.addPrinterToList(Model.rawPrinters(root.settings), form.address, form.name)
+    if (r.error) form = Model.formAfterSave(form, false, r.error)
+    else if (!savePrinters(r.list, r.key)) form = Model.formAfterSave(form, false, "")
+  }
+
+  // key is the printer the setup screen showed; its place in the list is
+  // what the raw list is cut by.
+  function removePrinter(key) {
+    for (var i = 0; i < config.printers.length; i++) {
+      if (config.printers[i].key === key) {
+        savePrinters(Model.removePrinterFromList(Model.rawPrinters(root.settings), config.printers[i].order), "")
+        return
+      }
+    }
+  }
+
+  // The 30 s guard of the search (Model.expireDiscovery).
+  Timer {
+    id: discoveryGuard
+    interval: Model.DISCOVERY_TIMEOUT_MS + 100
+    onTriggered: {
+      root.discovery = Model.expireDiscovery(root.discovery, Date.now())
+      if (root.discovery.state !== "running") root.stopAll(discoveryHolder)
+    }
+  }
+
+  Item {
+    id: discoveryHolder
+    visible: false
+  }
+
+  Item {
+    id: formHolder
+    visible: false
+  }
+
+  Item {
+    id: saveHolder
+    visible: false
+  }
+
+  Component {
+    id: processComponent
+
+    // One setup process (search, form check or save). Collects stdout and
+    // stderr, and hands exactly one result to acceptProcess: from the exit,
+    // from a binary that never started (launched false) or from the guard
+    // (exit code -2).
+    Item {
+      id: step
+      required property string sink
+      required property string kind
+      required property int seq
+      required property string ip
+      required property var args
+      required property int guardMs
+
+      property bool finished: false
+      property bool launched: false
+      property bool exited: false
+      property bool drainedOut: false
+      property bool drainedErr: false
+      property int exitCode: -1
+      property string output: ""
+      property string errors: ""
+
+      function complete(exitCode, launched) {
+        if (finished) return
+        finished = true
+        stepGuard.stop()
+        stepProc.running = false
+        root.acceptProcess(sink, kind, seq, ip, output, errors, exitCode, launched)
+        step.destroy()
+      }
+
+      function stop() {
+        finished = true
+        stepGuard.stop()
+        stepProc.running = false
+        step.destroy()
+      }
+
+      function tryComplete() {
+        if (exited && drainedOut && drainedErr) complete(exitCode, true)
+      }
+
+      Process {
+        id: stepProc
+        command: step.args
+        running: true
+        onStarted: step.launched = true
+        onRunningChanged: {
+          if (!running && !step.launched && !step.finished) step.complete(-1, false)
+        }
+        stdout: StdioCollector {
+          waitForEnd: true
+          onStreamFinished: {
+            step.output = String(text || "")
+            step.drainedOut = true
+            step.tryComplete()
+          }
+        }
+        stderr: StdioCollector {
+          waitForEnd: true
+          onStreamFinished: {
+            step.errors = String(text || "")
+            step.drainedErr = true
+            step.tryComplete()
+          }
+        }
+        onExited: function(exitCode) {
+          step.exitCode = exitCode
+          step.exited = true
+          step.tryComplete()
+        }
+      }
+
+      Timer {
+        id: stepGuard
+        interval: step.guardMs
+        running: true
+        onTriggered: step.complete(-2, true)
       }
     }
   }

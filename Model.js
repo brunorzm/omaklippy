@@ -27,9 +27,7 @@ var TEXT = {
   noPrintersTooltip: "OmaKlippy — no printers configured",
   updatedAgo: "updated %1 ago",
   noResponseFor: "no response for %1",
-  setupPrinterName: "My printer",
   panel: {
-    addPrinterWith: "Add a printer with:",
     file: "File",
     remaining: "Remaining",
     nozzle: "Nozzle",
@@ -54,7 +52,36 @@ var TEXT = {
     emergencyMessage: "Emergency stop %1? Klipper will shut down until a firmware restart.",
     restart: "Restart",
     restartMessage: "Restart the firmware on %1? Klipper and the printer's boards will restart.",
-    klipperMessage: "Restart the Klipper service on %1? It will start again on the printer's computer."
+    klipperMessage: "Restart the Klipper service on %1? It will start again on the printer's computer.",
+    remove: "Remove",
+    removeMessage: "Remove %1 from the list? You can add it again later."
+  },
+  setup: {
+    printers: "Printers…",
+    title: "Printers",
+    search: "Search network",
+    searching: "Searching… %1 found",
+    cancel: "Cancel",
+    back: "Back",
+    add: "Add",
+    added: "Added",
+    nothingFound: "No printers found on the network.",
+    addByAddress: "Add by address",
+    address: "Address",
+    name: "Name (optional)",
+    addressHint: "voron.local or 192.168.1.50",
+    checking: "Checking %1…",
+    addAnyway: "Add anyway",
+    alreadyAdded: "%1 is already in the list",
+    noMoonraker: "No printer answers at %1: %2",
+    notMoonraker: "not a Moonraker answer",
+    remove: "Remove %1",
+    mdnsUnavailable: "Network announcements unavailable (avahi not found): searched by address only.",
+    scanUnavailable: "Could not read the local networks (ip not found): searched by announcements only.",
+    notEditable: "OmaKlippy is on this bar more than once: edit the printers in shell.json.",
+    saveFailed: "Could not save the printers: %1",
+    shellNotFound: "omarchy-shell not found",
+    shellNoAnswer: "no answer from the shell"
   },
   actionFailed: "%1 failed: %2",
   left: "%1 left",
@@ -118,7 +145,13 @@ var ACTION_GLYPHS = {
   busy: "\u{f0772}",           // nf-md-loading
   openWebUi: "\u{f03cc}",      // nf-md-open_in_new
   firmwareRestart: "\u{f0709}", // nf-md-restart
-  klipperRestart: "\u{f0450}"   // nf-md-reload
+  klipperRestart: "\u{f0450}",  // nf-md-reload
+  openSetup: "\u{f0493}",       // nf-md-cog
+  search: "\u{f0349}",          // nf-md-magnify
+  cancelSearch: "\u{f0156}",    // nf-md-close
+  add: "\u{f0415}",             // nf-md-plus
+  remove: "\u{f01b4}",          // nf-md-delete
+  back: "\u{f004d}"             // nf-md-arrow_left
 }
 
 // Macros behind pause/resume/cancel can park, wait for moves and reheat, so
@@ -1274,13 +1307,6 @@ function buildIconState(printers, statusesByKey, selectedKey) {
   return { mode: st.state, progress: progress, tooltip: tooltipLine(top.printer, st) }
 }
 
-// The command the empty panel suggests. printers goes without --json: the
-// IPC argument parser behind `omarchy bar set` splits JSON lists.
-function setupCommand() {
-  return "omarchy bar set io.github.brunorzm.omaklippy printers " +
-    "'[{\"name\":\"" + TEXT.setupPrinterName + "\",\"address\":\"192.168.1.50\"}]'"
-}
-
 // ---- Formatting
 
 function formatTemp(t) {
@@ -1452,6 +1478,7 @@ function confirmMessage(action, displayName, filename) {
   if (action === "emergencyStop") return fill(TEXT.confirm.emergencyMessage, name)
   if (action === "firmwareRestart") return fill(TEXT.confirm.restartMessage, name)
   if (action === "klipperRestart") return fill(TEXT.confirm.klipperMessage, name)
+  if (action === "removePrinter") return fill(TEXT.confirm.removeMessage, name)
   return ""
 }
 
@@ -1459,6 +1486,7 @@ function confirmLabel(action) {
   if (action === "cancel") return TEXT.confirm.cancelPrint
   if (action === "emergencyStop") return TEXT.confirm.stop
   if (action === "firmwareRestart" || action === "klipperRestart") return TEXT.confirm.restart
+  if (action === "removePrinter") return TEXT.confirm.remove
   return ""
 }
 
@@ -1518,6 +1546,643 @@ function buildPanelModel(printers, statusesByKey, selectedKey, now, commandsByKe
   var commands = isObject(commandsByKey) ? commandsByKey[printer.key] : null
   return { empty: false, selected: selected, showJob: hasJob(selected.state), rows: rows, options: options,
     actions: buildActionsModel(printer, selectedStatus, commands, now), notifyWarning: warning }
+}
+
+// ---- Printer setup (slice 009): the list the shell saves, the network
+//      search and the add-by-address form. The shell writes its own config
+//      (omarchy-shell … setBarWidget); the plugin writes no file.
+
+var PLUGIN_ID = "io.github.brunorzm.omaklippy"
+var DISCOVERY_TIMEOUT_MS = 30000
+var SAVE_TIMEOUT_MS = 5000
+var NETS_TIMEOUT_MS = 3000
+var MDNS_TIMEOUT_MS = 6000
+var SCAN_TIMEOUT_MS = 20000
+var REVERSE_TIMEOUT_MS = 3000
+var SCAN_PARALLEL = 64
+
+// Interfaces that are not the local network: loopback, VPNs, containers and
+// bridges. A printer is never behind one of them.
+var IGNORED_IFACES = /^(lo|tailscale|wg|tun|tap|docker|br-|veth|virbr|zt)/
+
+function isIPv4(text) {
+  var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(typeof text === "string" ? text : "")
+  if (!m) return false
+  for (var i = 1; i <= 4; i++) if (Number(m[i]) > 255) return false
+  return true
+}
+
+function timeoutSecOf(value) {
+  return clampInt(value, 1, 30, DEFAULT_TIMEOUT_SEC)
+}
+
+// The host alone (no port), lowercased: what tells two addresses of the same
+// printer apart from two printers.
+function bareHost(baseUrl) {
+  return hostOf(baseUrl).replace(/:\d+$/, "").toLowerCase()
+}
+
+function isListItem(item) {
+  return item !== null && typeof item === "object" && typeof item.address === "string"
+}
+
+// The printers list exactly as the settings hold it (not normalized), so a
+// save keeps webUrl, names and any field the plugin does not know.
+function rawPrinters(settings) {
+  var s = settings !== null && typeof settings === "object" ? settings : {}
+  return toList(s.printers, true).slice()
+}
+
+// Returns { list, key, error }: list is the new raw list (null on error) and
+// key the new printer's normalized key (baseUrl#order), known before saving.
+function addPrinterToList(raw, address, name) {
+  var src = toList(raw, false)
+  var text = typeof address === "string" ? address.trim() : ""
+  var baseUrl = normalizeAddress(text)
+  if (baseUrl === "") return { list: null, key: "", error: TEXT.invalidAddress }
+  var current = normalizePrinters(src)
+  for (var i = 0; i < current.length; i++) {
+    // The same host on another port is the same printer: Mainsail's nginx
+    // passes the API on port 80 to Moonraker's 7125.
+    if (current[i].baseUrl !== "" && bareHost(current[i].baseUrl) === bareHost(baseUrl))
+      return { list: null, key: "", error: fill(TEXT.setup.alreadyAdded, text) }
+  }
+  var item = {}
+  var label = typeof name === "string" ? name.trim() : ""
+  if (label !== "") item.name = label
+  item.address = text
+  var list = src.slice()
+  list.push(item)
+  return { list: list, key: baseUrl + "#" + current.length, error: "" }
+}
+
+// order is the printer's place among the accepted items (normalizePrinters
+// skips entries without a text address); anything else stays as it was.
+function removePrinterFromList(raw, order) {
+  var src = toList(raw, false)
+  var out = []
+  var seen = 0
+  for (var i = 0; i < src.length; i++) {
+    if (isListItem(src[i])) {
+      if (seen === order) { seen++; continue }
+      seen++
+    }
+    out.push(src[i])
+  }
+  return out
+}
+
+// The space before the JSON is required: qs ipc (Quickshell 0.3.1) splits an
+// argument that starts with "[" into several, and the shell's JSON.parse
+// ignores the space (research R1).
+function buildSaveArgs(list) {
+  var items = toList(list, false)
+  var json = "[]"
+  try { json = JSON.stringify(items) } catch (e) { json = "[]" }
+  return ["omarchy-shell", "shell", "setBarWidget", PLUGIN_ID, "printers", " " + json, "{}"]
+}
+
+// omarchy-shell exits 0 even when the shell refuses, so the answer text
+// decides. exitCode -2 is the guard timer; launched false, a missing binary.
+function parseSaveResult(stdout, exitCode, launched, stderr) {
+  if (launched === false) return { ok: false, message: TEXT.setup.shellNotFound }
+  if (exitCode === -2) return { ok: false, message: TEXT.setup.shellNoAnswer }
+  var out = typeof stdout === "string" ? stdout.trim() : ""
+  if (out === "ok") return { ok: true, message: "" }
+  if (out !== "") return { ok: false, message: tidyMessage(out) }
+  var err = typeof stderr === "string" ? tidyMessage(stderr) : ""
+  if (err !== "") return { ok: false, message: err }
+  return { ok: false, message: typeof exitCode === "number" && exitCode !== 0 ? "exit " + exitCode : TEXT.setup.shellNoAnswer }
+}
+
+// ---- Search: local networks, announcements, the network check, names.
+
+function buildNetsArgs() {
+  return ["ip", "-j", "-4", "addr", "show"]
+}
+
+// One /24 per directly connected IPv4 network (bigger ones are searched only
+// around this computer), without VPNs, containers or bridges.
+function parseLocalNets(stdout, exitCode) {
+  if (exitCode !== 0 || typeof stdout !== "string") return []
+  var data = null
+  try { data = JSON.parse(stdout) } catch (e) { return [] }
+  if (!Array.isArray(data)) return []
+  var out = []
+  var seen = {}
+  for (var i = 0; i < data.length; i++) {
+    var iface = data[i]
+    if (!isObject(iface) || typeof iface.ifname !== "string" || IGNORED_IFACES.test(iface.ifname)) continue
+    var addrs = Array.isArray(iface.addr_info) ? iface.addr_info : []
+    for (var j = 0; j < addrs.length; j++) {
+      var a = addrs[j]
+      if (!isObject(a) || (a.family !== undefined && a.family !== "inet") || a.scope !== "global") continue
+      var len = finiteOrNull(a.prefixlen)
+      if (len === null || len < 16 || len > 30 || !isIPv4(a.local)) continue
+      var prefix = a.local.slice(0, a.local.lastIndexOf(".") + 1)
+      if (seen[prefix]) continue
+      seen[prefix] = true
+      out.push({ iface: iface.ifname, prefix: prefix, self: a.local })
+    }
+  }
+  return out
+}
+
+function buildMdnsArgs() {
+  return ["avahi-browse", "-rtp", "_moonraker._tcp"]
+}
+
+// avahi's parseable output escapes characters as \DDD (decimal) and others
+// as \c: "My\032Printer" is "My Printer".
+function unescapeAvahi(text) {
+  return String(text).replace(/\\(\d{3}|.)/g, function(match, code) {
+    return code.length === 3 ? String.fromCharCode(Number(code)) : code
+  })
+}
+
+// "=" lines are resolved services:
+// =;iface;IPv4;name;_moonraker._tcp;local;host.local;ip;port;txt
+function parseMdns(stdout) {
+  if (typeof stdout !== "string") return []
+  var lines = stdout.split("\n")
+  var out = []
+  var seen = {}
+  for (var i = 0; i < lines.length; i++) {
+    var f = lines[i].split(";")
+    if (f.length < 9 || f[0] !== "=" || f[2] !== "IPv4" || !isIPv4(f[7]) || seen[f[7]]) continue
+    var port = clampInt(f[8], 1, 65535, MOONRAKER_DEFAULT_PORT)
+    seen[f[7]] = true
+    out.push({ name: unescapeAvahi(f[3]), host: unescapeAvahi(f[6]), ip: f[7], port: port })
+  }
+  return out
+}
+
+// One curl for every address of every network: one process for the shell
+// to watch, 64 connections at a time, only GETs of Moonraker's info.
+function buildScanArgs(nets) {
+  var list = toList(nets, false)
+  var targets = []
+  for (var i = 0; i < list.length; i++) {
+    var n = list[i]
+    if (!isObject(n) || typeof n.prefix !== "string" || !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.$/.test(n.prefix)) continue
+    for (var h = 1; h <= 254; h++) {
+      var ip = n.prefix + h
+      if (ip !== n.self) targets.push("-o", "/dev/null", "http://" + ip + ":" + MOONRAKER_DEFAULT_PORT + "/server/info")
+    }
+  }
+  if (targets.length === 0) return []
+  return ["curl", "-s", "--parallel", "--parallel-max", String(SCAN_PARALLEL), "--connect-timeout", "1", "--max-time", "2",
+    "-w", "%{url} %{http_code}\n"].concat(targets)
+}
+
+// curl's exit code is that of the last address, even when others answered,
+// so only the lines count.
+function parseScan(stdout) {
+  if (typeof stdout !== "string") return []
+  var lines = stdout.split("\n")
+  var out = []
+  for (var i = 0; i < lines.length; i++) {
+    var m = /^https?:\/\/(\d+\.\d+\.\d+\.\d+)(?::\d+)?\/\S*\s+200\s*$/.exec(lines[i])
+    if (m && isIPv4(m[1]) && out.indexOf(m[1]) < 0) out.push(m[1])
+  }
+  return out
+}
+
+function buildReverseArgs(ip) {
+  return ["avahi-resolve", "-a", String(ip)]
+}
+
+// "192.168.1.110\tvoron.local" → "voron.local"; anything else → "".
+function parseReverse(stdout, exitCode) {
+  if (exitCode !== 0 || typeof stdout !== "string") return ""
+  var f = stdout.split("\n")[0].split("\t")
+  if (f.length < 2 || !isIPv4(f[0].trim())) return ""
+  var host = f[1].trim()
+  return /^[A-Za-z0-9._-]+$/.test(host) ? host : ""
+}
+
+function buildHostnameArgs(baseUrl, timeoutSec) {
+  if (typeof baseUrl !== "string" || baseUrl === "") return []
+  return buildCurlArgs(baseUrl + "/printer/info", timeoutSecOf(timeoutSec))
+}
+
+// The name the printer's computer gives itself (fails while Klipper is
+// disconnected: the name then comes from the network).
+function parseHostname(stdout, exitCode) {
+  var t = readTransport(stdout, exitCode)
+  if (t.errorMessage || t.httpStatus < 200 || t.httpStatus >= 300) return ""
+  var res = isObject(t.data) && isObject(t.data.result) ? t.data.result : null
+  return res ? stringOr(res.hostname, "").trim() : ""
+}
+
+function parseMoonrakerCheck(stdout, exitCode) {
+  var t = readTransport(stdout, exitCode)
+  if (t.errorMessage) return { ok: false, message: tidyMessage(t.errorMessage) }
+  var res = isObject(t.data) && isObject(t.data.result) ? t.data.result : null
+  if (t.httpStatus >= 200 && t.httpStatus < 300 && res &&
+      (typeof res.klippy_state === "string" || typeof res.moonraker_version === "string"))
+    return { ok: true, message: "" }
+  return { ok: false, message: TEXT.setup.notMoonraker }
+}
+
+// ---- Search state machine. Every accept* returns { discovery, requests };
+//      the widget runs the requests (each with kind, seq, ip, args, guardMs)
+//      and hands each result back. Answers of another search are ignored.
+
+function emptyDiscovery() {
+  return { state: "idle", seq: 0, startedAt: null, timeoutSec: DEFAULT_TIMEOUT_SEC, waiting: {}, found: [],
+    mdnsUnavailable: false, scanUnavailable: false }
+}
+
+function isDiscovery(d) {
+  return isObject(d) && Array.isArray(d.found) && isObject(d.waiting)
+}
+
+function startDiscovery(d, now, timeoutSec) {
+  var seq = (isDiscovery(d) ? finiteOrNull(d.seq) || 0 : 0) + 1
+  return {
+    discovery: { state: "running", seq: seq, startedAt: finiteOrNull(now), timeoutSec: timeoutSecOf(timeoutSec),
+      waiting: { nets: 1, mdns: 1 }, found: [], mdnsUnavailable: false, scanUnavailable: false },
+    requests: [
+      { kind: "nets", seq: seq, ip: "", args: buildNetsArgs(), guardMs: NETS_TIMEOUT_MS },
+      { kind: "mdns", seq: seq, ip: "", args: buildMdnsArgs(), guardMs: MDNS_TIMEOUT_MS }
+    ]
+  }
+}
+
+function accepting(d, seq) {
+  return isDiscovery(d) && d.state === "running" && d.seq === seq
+}
+
+function unchanged(d) {
+  return { discovery: d, requests: [] }
+}
+
+// Counts one answer of the given kind and ends the search once nothing is
+// left to wait for.
+function settle(d, kind, extra) {
+  var waiting = copy(d.waiting)
+  var n = (finiteOrNull(waiting[kind]) || 0) - 1 + (extra || 0)
+  if (n > 0) waiting[kind] = n
+  else delete waiting[kind]
+  var next = copy(d)
+  next.waiting = waiting
+  return next
+}
+
+function isFoundAdded(found, printers) {
+  if (!isObject(found)) return false
+  var list = Array.isArray(printers) ? printers : []
+  var ip = stringOr(found.ip, "").toLowerCase()
+  var host = stringOr(found.address, "").toLowerCase()
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i]
+    if (!isObject(p) || !p.baseUrl) continue
+    var h = bareHost(p.baseUrl)
+    if (h !== "" && (h === ip || h === host)) return true
+  }
+  return false
+}
+
+// Preferred address: the name on the network, the announced host, the IP.
+// Name: what the printer calls itself, the announced name, the network name
+// without ".local", the IP.
+function completeFound(f, printers) {
+  var out = copy(f)
+  out.address = f.reverse || f.mdnsHost || f.ip
+  var short = out.address !== f.ip ? out.address.replace(/\.local$/i, "") : ""
+  out.name = f.hostname || f.mdnsName || short || f.ip
+  out.added = isFoundAdded(out, printers)
+  return out
+}
+
+function sortFound(list) {
+  return list.slice().sort(function(a, b) {
+    var x = a.name.toLowerCase()
+    var y = b.name.toLowerCase()
+    if (x !== y) return x < y ? -1 : 1
+    return a.ip < b.ip ? -1 : (a.ip > b.ip ? 1 : 0)
+  })
+}
+
+// Adds candidates (by IP) from one source; a new IP gets a reverse lookup and
+// a /printer/info each.
+function addCandidates(d, source, candidates, printers) {
+  var found = d.found.slice()
+  var requests = []
+  var asked = 0
+  for (var i = 0; i < candidates.length; i++) {
+    var c = candidates[i]
+    var at = -1
+    for (var j = 0; j < found.length; j++) if (found[j].ip === c.ip) at = j
+    var f
+    if (at < 0) {
+      f = { ip: c.ip, port: c.port || MOONRAKER_DEFAULT_PORT, sources: [source], mdnsName: "", mdnsHost: "",
+        reverse: "", hostname: "", pending: 2 }
+      requests.push({ kind: "reverse", seq: d.seq, ip: c.ip, args: buildReverseArgs(c.ip), guardMs: REVERSE_TIMEOUT_MS })
+      requests.push({ kind: "hostname", seq: d.seq, ip: c.ip,
+        args: buildHostnameArgs("http://" + c.ip + ":" + f.port, d.timeoutSec), guardMs: (d.timeoutSec + 1) * 1000 })
+      asked += 2
+    } else {
+      f = copy(found[at])
+      if (f.sources.indexOf(source) < 0) f.sources = f.sources.concat([source]).sort()
+    }
+    if (source === "mdns") {
+      if (!f.mdnsName) f.mdnsName = stringOr(c.name, "")
+      if (!f.mdnsHost) f.mdnsHost = stringOr(c.host, "")
+      if (c.port) f.port = c.port
+    }
+    f = completeFound(f, printers)
+    if (at < 0) found.push(f)
+    else found[at] = f
+  }
+  var next = copy(d)
+  next.found = sortFound(found)
+  if (asked > 0) {
+    next.waiting = copy(d.waiting)
+    next.waiting.names = (finiteOrNull(next.waiting.names) || 0) + asked
+  }
+  return { discovery: next, requests: requests }
+}
+
+function acceptNets(d, seq, nets, launched) {
+  if (!accepting(d, seq)) return unchanged(d)
+  var list = toList(nets, false)
+  var args = launched === false ? [] : buildScanArgs(list)
+  if (args.length === 0) {
+    var none = settle(d, "nets")
+    none.scanUnavailable = true
+    return { discovery: discoveryDone(none), requests: [] }
+  }
+  var next = settle(d, "nets")
+  next.waiting.scan = 1
+  return { discovery: next, requests: [{ kind: "scan", seq: seq, ip: "", args: args, guardMs: SCAN_TIMEOUT_MS }] }
+}
+
+function acceptMdns(d, seq, list, launched, printers) {
+  if (!accepting(d, seq)) return unchanged(d)
+  var next = settle(d, "mdns")
+  if (launched === false) {
+    next.mdnsUnavailable = true
+    return { discovery: discoveryDone(next), requests: [] }
+  }
+  var items = toList(list, false).filter(function(c) { return isObject(c) && isIPv4(c.ip) })
+  var r = addCandidates(next, "mdns", items, printers)
+  return { discovery: discoveryDone(r.discovery), requests: r.requests }
+}
+
+function acceptScan(d, seq, ips, printers) {
+  if (!accepting(d, seq)) return unchanged(d)
+  var items = toList(ips, false).filter(isIPv4).map(function(ip) { return { ip: ip } })
+  var r = addCandidates(settle(d, "scan"), "scan", items, printers)
+  return { discovery: discoveryDone(r.discovery), requests: r.requests }
+}
+
+function acceptName(d, seq, ip, field, value, printers) {
+  if (!accepting(d, seq)) return unchanged(d)
+  var at = -1
+  for (var i = 0; i < d.found.length; i++) if (d.found[i].ip === ip) at = i
+  if (at < 0 || !(d.found[at].pending > 0)) return unchanged(d)
+  var f = copy(d.found[at])
+  f[field] = stringOr(value, "").trim()
+  f.pending = f.pending - 1
+  var next = settle(d, "names")
+  next.found = d.found.slice()
+  next.found[at] = completeFound(f, printers)
+  next.found = sortFound(next.found)
+  return { discovery: discoveryDone(next), requests: [] }
+}
+
+function acceptReverse(d, seq, ip, host, printers) {
+  return acceptName(d, seq, ip, "reverse", host, printers)
+}
+
+function acceptHostname(d, seq, ip, name, printers) {
+  return acceptName(d, seq, ip, "hostname", name, printers)
+}
+
+// One process result, as the widget gets it, through the right parser.
+function acceptDiscoveryOutput(d, kind, seq, ip, stdout, exitCode, launched, printers) {
+  if (kind === "nets") return acceptNets(d, seq, parseLocalNets(stdout, exitCode), launched)
+  if (kind === "mdns") return acceptMdns(d, seq, parseMdns(stdout), launched, printers)
+  if (kind === "scan") return acceptScan(d, seq, parseScan(stdout), printers)
+  if (kind === "reverse") return acceptReverse(d, seq, ip, parseReverse(stdout, exitCode), printers)
+  if (kind === "hostname") return acceptHostname(d, seq, ip, parseHostname(stdout, exitCode), printers)
+  return unchanged(d)
+}
+
+// The caller stops the search's processes.
+function cancelDiscovery(d) {
+  var next = isDiscovery(d) ? copy(d) : emptyDiscovery()
+  next.state = "idle"
+  next.found = []
+  next.waiting = {}
+  return next
+}
+
+function finishFound(found) {
+  return found.map(function(f) {
+    if (!(f.pending > 0)) return f
+    var g = copy(f)
+    g.pending = 0
+    return g
+  })
+}
+
+// The 30 s guard: the search ends with what it has.
+function expireDiscovery(d, now) {
+  if (!isDiscovery(d) || d.state !== "running") return d
+  var t = finiteOrNull(now)
+  var since = finiteOrNull(d.startedAt)
+  if (t === null || since === null || t - since < DISCOVERY_TIMEOUT_MS) return d
+  var next = copy(d)
+  next.state = "done"
+  next.waiting = {}
+  next.found = finishFound(d.found)
+  return next
+}
+
+function discoveryDone(d) {
+  if (!isDiscovery(d) || d.state !== "running") return d
+  for (var k in d.waiting) if (d.waiting[k] > 0) return d
+  var next = copy(d)
+  next.state = "done"
+  next.waiting = {}
+  return next
+}
+
+// What a found printer is saved as: its address with the port it answered
+// on (the network check only asks Moonraker's own port).
+function foundAddress(found) {
+  if (!isObject(found) || typeof found.address !== "string" || found.address === "") return ""
+  return found.address + ":" + clampInt(found.port, 1, 65535, MOONRAKER_DEFAULT_PORT)
+}
+
+// ---- Add by address: editing → checking → (naming) → saving, or
+//      unreachable (the reason and Add anyway). Every step that runs a
+//      process returns it as { kind, seq, args, guardMs }.
+
+function emptyForm() {
+  return { state: "editing", address: "", name: "", baseUrl: "", message: "", seq: 0, timeoutSec: DEFAULT_TIMEOUT_SEC }
+}
+
+function isForm(f) {
+  return isObject(f) && typeof f.state === "string"
+}
+
+function submitForm(form, raw, address, name, timeoutSec) {
+  var f = isForm(form) ? form : emptyForm()
+  var text = typeof address === "string" ? address.trim() : ""
+  var label = typeof name === "string" ? name.trim() : ""
+  var check = addPrinterToList(raw, text, label)
+  var next = copy(f)
+  next.address = text
+  next.name = label
+  if (check.error) {
+    next.state = "editing"
+    next.message = check.error
+    return { form: next, request: null }
+  }
+  var t = timeoutSecOf(timeoutSec)
+  next.state = "checking"
+  next.message = ""
+  next.baseUrl = normalizeAddress(text)
+  next.seq = (finiteOrNull(f.seq) || 0) + 1
+  next.timeoutSec = t
+  return { form: next, request: { kind: "check", seq: next.seq, ip: "", args: buildCurlArgs(next.baseUrl + "/server/info", t),
+    guardMs: (t + 1) * 1000 } }
+}
+
+function hostName(form) {
+  return bareHost(form.baseUrl) || form.address
+}
+
+function acceptCheck(form, seq, result) {
+  if (!isForm(form) || form.state !== "checking" || form.seq !== seq) return { form: form, request: null }
+  var next = copy(form)
+  if (!isObject(result) || result.ok !== true) {
+    next.state = "unreachable"
+    next.message = fill(TEXT.setup.noMoonraker, form.address, (isObject(result) && stringOr(result.message, "")) || TEXT.noResponse)
+    return { form: next, request: null }
+  }
+  if (form.name !== "") {
+    next.state = "saving"
+    return { form: next, request: null }
+  }
+  next.state = "naming"
+  return { form: next, request: { kind: "formHostname", seq: seq, ip: "", args: buildHostnameArgs(form.baseUrl, form.timeoutSec),
+    guardMs: (form.timeoutSec + 1) * 1000 } }
+}
+
+function acceptFormHostname(form, seq, hostname) {
+  if (!isForm(form) || form.state !== "naming" || form.seq !== seq) return form
+  var next = copy(form)
+  next.state = "saving"
+  next.name = stringOr(hostname, "").trim() || hostName(form)
+  return next
+}
+
+function addAnyway(form) {
+  if (!isForm(form) || form.state !== "unreachable") return form
+  var next = copy(form)
+  next.state = "saving"
+  next.message = ""
+  if (next.name === "") next.name = hostName(form)
+  return next
+}
+
+function acceptFormOutput(form, kind, seq, stdout, exitCode) {
+  if (kind === "check") return acceptCheck(form, seq, parseMoonrakerCheck(stdout, exitCode))
+  if (kind === "formHostname") return { form: acceptFormHostname(form, seq, parseHostname(stdout, exitCode)), request: null }
+  return { form: form, request: null }
+}
+
+// The form once the shell answered a save: cleared on success, back to
+// editing (the typed text kept) with the reason otherwise.
+function formAfterSave(form, ok, message) {
+  if (!isForm(form) || form.state !== "saving") return form
+  if (ok === true) return emptyForm()
+  var next = copy(form)
+  next.state = "editing"
+  next.message = stringOr(message, "")
+  return next
+}
+
+function checkingText(form) {
+  if (!isForm(form)) return ""
+  if (form.state === "checking" || form.state === "naming" || form.state === "saving") return fill(TEXT.setup.checking, form.address)
+  return stringOr(form.message, "")
+}
+
+// ---- Setup screen
+
+function buildSetupModel(printers, discovery, form, selectedKey, editable, saveMessage) {
+  var list = Array.isArray(printers) ? printers : []
+  var d = isDiscovery(discovery) ? discovery : emptyDiscovery()
+  var f = isForm(form) ? form : emptyForm()
+  var canEdit = editable !== false
+  var searching = d.state === "running"
+  var results = []
+  for (var i = 0; i < d.found.length; i++) {
+    var x = d.found[i]
+    if (!isObject(x)) continue
+    results.push({ ip: x.ip, name: x.name, address: x.address, added: isFoundAdded(x, list), ready: !(x.pending > 0) })
+  }
+  var notices = []
+  if (!canEdit) notices.push(TEXT.setup.notEditable)
+  if (d.mdnsUnavailable) notices.push(TEXT.setup.mdnsUnavailable)
+  if (d.scanUnavailable) notices.push(TEXT.setup.scanUnavailable)
+  var removeKey = ""
+  var removeName = ""
+  if (typeof selectedKey === "string" && selectedKey !== "") {
+    for (var j = 0; j < list.length; j++) {
+      if (isObject(list[j]) && list[j].key === selectedKey) { removeKey = list[j].key; removeName = list[j].displayName }
+    }
+  }
+  return {
+    searching: searching,
+    foundCount: results.length,
+    searchLabel: searching ? fill(TEXT.setup.searching, results.length) : TEXT.setup.search,
+    results: results,
+    notices: notices,
+    nothingFound: d.state === "done" && results.length === 0,
+    removeKey: removeKey,
+    removeName: removeName,
+    removeLabel: removeKey !== "" ? fill(TEXT.setup.remove, removeName) : "",
+    editable: canEdit,
+    formState: f.state,
+    formText: checkingText(f),
+    formBusy: f.state === "checking" || f.state === "naming" || f.state === "saving",
+    showAddAnyway: f.state === "unreachable",
+    saveMessage: stringOr(saveMessage, "")
+  }
+}
+
+// Keyboard stops of the setup screen, in reading order. Result buttons are
+// "add:<ip>"; only a printer that can be added now is a stop.
+function setupCursorStops(setupModel, empty) {
+  var m = isObject(setupModel) ? setupModel : {}
+  var stops = []
+  if (m.editable !== false) {
+    stops.push(m.searching ? "cancelSearch" : "search")
+    var results = Array.isArray(m.results) ? m.results : []
+    for (var i = 0; i < results.length; i++) {
+      if (isObject(results[i]) && !results[i].added && results[i].ready) stops.push("add:" + results[i].ip)
+    }
+    stops.push("address", "name", "submit")
+    if (m.showAddAnyway) stops.push("addAnyway")
+    if (m.removeKey) stops.push("remove")
+  }
+  if (empty !== true) stops.push("back")
+  return stops
+}
+
+// The panel's keyboard stops for the screen it shows: the main screen ends
+// with Printers…; the empty panel always shows the setup screen.
+function panelStops(panelModel, setupModel, inSetup) {
+  var empty = !isObject(panelModel) || panelModel.empty !== false
+  if (inSetup === true || empty) return setupCursorStops(setupModel, empty)
+  return cursorStops(panelModel).concat(["openSetup"])
 }
 
 if (typeof module !== "undefined") {
@@ -1582,7 +2247,6 @@ if (typeof module !== "undefined") {
     planEstimate: planEstimate,
     acceptEstimate: acceptEstimate,
     blendRemaining: blendRemaining,
-    setupCommand: setupCommand,
     tidyMessage: tidyMessage,
     availableActions: availableActions,
     KLIPPY_DOWN_OFFER_MS: KLIPPY_DOWN_OFFER_MS,
@@ -1609,6 +2273,48 @@ if (typeof module !== "undefined") {
     confirmMessage: confirmMessage,
     confirmLabel: confirmLabel,
     cursorStops: cursorStops,
+    rawPrinters: rawPrinters,
+    addPrinterToList: addPrinterToList,
+    removePrinterFromList: removePrinterFromList,
+    buildSaveArgs: buildSaveArgs,
+    parseSaveResult: parseSaveResult,
+    buildNetsArgs: buildNetsArgs,
+    parseLocalNets: parseLocalNets,
+    buildMdnsArgs: buildMdnsArgs,
+    parseMdns: parseMdns,
+    buildScanArgs: buildScanArgs,
+    parseScan: parseScan,
+    buildReverseArgs: buildReverseArgs,
+    parseReverse: parseReverse,
+    buildHostnameArgs: buildHostnameArgs,
+    parseHostname: parseHostname,
+    parseMoonrakerCheck: parseMoonrakerCheck,
+    emptyDiscovery: emptyDiscovery,
+    startDiscovery: startDiscovery,
+    acceptNets: acceptNets,
+    acceptMdns: acceptMdns,
+    acceptScan: acceptScan,
+    acceptReverse: acceptReverse,
+    acceptHostname: acceptHostname,
+    acceptDiscoveryOutput: acceptDiscoveryOutput,
+    cancelDiscovery: cancelDiscovery,
+    expireDiscovery: expireDiscovery,
+    discoveryDone: discoveryDone,
+    isFoundAdded: isFoundAdded,
+    foundAddress: foundAddress,
+    emptyForm: emptyForm,
+    submitForm: submitForm,
+    acceptCheck: acceptCheck,
+    acceptFormHostname: acceptFormHostname,
+    addAnyway: addAnyway,
+    acceptFormOutput: acceptFormOutput,
+    checkingText: checkingText,
+    formAfterSave: formAfterSave,
+    panelStops: panelStops,
+    buildSetupModel: buildSetupModel,
+    setupCursorStops: setupCursorStops,
+    DISCOVERY_TIMEOUT_MS: DISCOVERY_TIMEOUT_MS,
+    SAVE_TIMEOUT_MS: SAVE_TIMEOUT_MS,
     stepCursor: stepCursor
   }
 }

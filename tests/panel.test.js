@@ -164,13 +164,6 @@ test("buildPanelModel without printers is the empty state", () => {
     actions: { buttons: [], primary: [], emergency: null, web: null, failureText: "", filename: "" }, notifyWarning: "" })
 })
 
-test("setupCommand is the exact command shown in the empty panel", () => {
-  assert.equal(
-    M.setupCommand(),
-    `omarchy bar set io.github.brunorzm.omaklippy printers '[{"name":"My printer","address":"192.168.1.50"}]'`
-  )
-})
-
 test("tidyMessage joins hard-wrapped lines inside each paragraph", () => {
   assert.equal(M.tidyMessage("a\nb  c\n\n\nd\n e\n"), "a b c\n\nd e")
   assert.equal(M.tidyMessage("   "), "")
