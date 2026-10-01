@@ -18,6 +18,7 @@ remove: "Remove %1"               removeMessage: "Remove %1 from the list? You c
 removeConfirm: "Remove"
 mdnsUnavailable: "Network announcements unavailable (avahi not found): searched by address only."
 scanUnavailable: "Could not read the local networks (ip not found): searched by announcements only."
+noLocalNetwork: "No local network found: searched by announcements only."
 notEditable: "OmaKlippy is on this bar more than once: edit the printers in shell.json."
 saveFailed: "Could not save the printers: %1"
 shellNoAnswer: "no answer from the shell"
@@ -41,9 +42,9 @@ shellNoAnswer: "no answer from the shell"
 
 | Função | Contrato |
 |--------|----------|
-| `emptyDiscovery()` | `{ state: "idle", seq: 0, startedAt: null, waiting: {}, found: [], mdnsUnavailable: false, scanUnavailable: false }` |
+| `emptyDiscovery()` | `{ state: "idle", seq: 0, startedAt: null, waiting: {}, found: [], mdnsUnavailable: false, scanUnavailable: false, noLocalNetwork: false }` |
 | `startDiscovery(d, now)` | `{ discovery, requests }`: `state: running`, `seq + 1`, `found: []`, pedidos `nets` e `mdns` com `seq` |
-| `acceptNets(d, seq, nets, launched)` | seq errada → mesmo; sem redes ou não iniciou → `scanUnavailable`; senão pedido `scan` |
+| `acceptNets(d, seq, nets, launched)` | seq errada → mesmo; não iniciou → `scanUnavailable`; rodou sem rede local → `noLocalNetwork`; senão pedido `scan` |
 | `acceptMdns(d, seq, list, launched, printers)` | não iniciou → `mdnsUnavailable`; candidatos novos com pedidos `reverse` e `hostname` |
 | `acceptScan(d, seq, ips, printers)` | candidatos novos (ou `sources` somado) com pedidos de nome |
 | `acceptReverse(d, seq, ip, host, printers)` / `acceptHostname(d, seq, ip, name, printers)` | completa o Found, recalcula `address`, `name`, `added` |

@@ -35,13 +35,14 @@ Só endereços IPv4 `scope global`, prefixo de 16 a 30, interface fora de
 | `waiting` | objeto | pedidos em andamento por tipo: `nets`, `mdns`, `scan`, `names` (contagem) |
 | `found` | lista de Found | ordenada por `name` |
 | `mdnsUnavailable` | bool | `avahi-browse` não iniciou |
-| `scanUnavailable` | bool | `ip` não iniciou ou nenhuma rede local |
+| `scanUnavailable` | bool | `ip` não iniciou |
+| `noLocalNetwork` | bool | `ip` rodou, mas não há rede local (só VPN, contêiner ou nenhuma) |
 
 Transições:
 
 ```text
 idle --startDiscovery--> running   (pedidos: ip, avahi-browse)
-running: acceptNets   → pedido de verificação (se houver rede), senão scanUnavailable
+running: acceptNets   → pedido de verificação (se houver rede), senão scanUnavailable (ip ausente) ou noLocalNetwork
          acceptMdns   → candidatos "mdns"
          acceptScan   → candidatos "scan"
          cada candidato novo → pedidos avahi-resolve -a e /printer/info

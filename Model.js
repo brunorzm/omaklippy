@@ -78,6 +78,7 @@ var TEXT = {
     remove: "Remove %1",
     mdnsUnavailable: "Network announcements unavailable (avahi not found): searched by address only.",
     scanUnavailable: "Could not read the local networks (ip not found): searched by announcements only.",
+    noLocalNetwork: "No local network found: searched by announcements only.",
     notEditable: "OmaKlippy is on this bar more than once: edit the printers in shell.json.",
     saveFailed: "Could not save the printers: %1",
     shellNotFound: "omarchy-shell not found",
@@ -1791,7 +1792,7 @@ function parseMoonrakerCheck(stdout, exitCode) {
 
 function emptyDiscovery() {
   return { state: "idle", seq: 0, startedAt: null, timeoutSec: DEFAULT_TIMEOUT_SEC, waiting: {}, found: [],
-    mdnsUnavailable: false, scanUnavailable: false }
+    mdnsUnavailable: false, scanUnavailable: false, noLocalNetwork: false }
 }
 
 function isDiscovery(d) {
@@ -1802,7 +1803,7 @@ function startDiscovery(d, now, timeoutSec) {
   var seq = (isDiscovery(d) ? finiteOrNull(d.seq) || 0 : 0) + 1
   return {
     discovery: { state: "running", seq: seq, startedAt: finiteOrNull(now), timeoutSec: timeoutSecOf(timeoutSec),
-      waiting: { nets: 1, mdns: 1 }, found: [], mdnsUnavailable: false, scanUnavailable: false },
+      waiting: { nets: 1, mdns: 1 }, found: [], mdnsUnavailable: false, scanUnavailable: false, noLocalNetwork: false },
     requests: [
       { kind: "nets", seq: seq, ip: "", args: buildNetsArgs(), guardMs: NETS_TIMEOUT_MS },
       { kind: "mdns", seq: seq, ip: "", args: buildMdnsArgs(), guardMs: MDNS_TIMEOUT_MS }
@@ -1911,7 +1912,9 @@ function acceptNets(d, seq, nets, launched) {
   var args = launched === false ? [] : buildScanArgs(list)
   if (args.length === 0) {
     var none = settle(d, "nets")
-    none.scanUnavailable = true
+    // ip missing, or it ran and found only VPNs, containers or nothing.
+    if (launched === false) none.scanUnavailable = true
+    else none.noLocalNetwork = true
     return { discovery: discoveryDone(none), requests: [] }
   }
   var next = settle(d, "nets")
@@ -2132,6 +2135,7 @@ function buildSetupModel(printers, discovery, form, selectedKey, editable, saveM
   if (!canEdit) notices.push(TEXT.setup.notEditable)
   if (d.mdnsUnavailable) notices.push(TEXT.setup.mdnsUnavailable)
   if (d.scanUnavailable) notices.push(TEXT.setup.scanUnavailable)
+  if (d.noLocalNetwork) notices.push(TEXT.setup.noLocalNetwork)
   var removeKey = ""
   var removeName = ""
   if (typeof selectedKey === "string" && selectedKey !== "") {

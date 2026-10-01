@@ -107,7 +107,8 @@ Open the panel and press **Printers…** (a panel without printers opens straigh
 - **Search network** looks for printers on this computer's local network, only when you press
   it: Moonraker announcements (mDNS), plus a check of every address of the local /24 on port
   7125 (`GET /server/info`, one `curl` for the whole network, 64 at a time). VPN, container and
-  bridge interfaces are skipped. It takes a few seconds and gives up after 30 s; **Cancel**, Escape
+  bridge interfaces are skipped; with no other network (only a VPN, say) the panel says so and the
+  search uses announcements only. It takes a few seconds and gives up after 30 s; **Cancel**, Escape
   or closing the panel stops it. Each printer found shows its name and address, and **Add** saves
   it (**Added** when it is already in your list, by name or by IP).
 - A printer found is saved with the name its computer gives itself (`GET /printer/info`), or its

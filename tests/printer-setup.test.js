@@ -206,8 +206,14 @@ test("acceptNets asks for the check, or marks it unavailable", () => {
   assert.equal(r.discovery.scanUnavailable, false)
   const none = M.acceptNets(d, 1, [], true)
   assert.deepEqual(none.requests, [])
-  assert.equal(none.discovery.scanUnavailable, true)
-  assert.equal(M.acceptNets(d, 1, [], false).discovery.scanUnavailable, true)
+  // ip ran but found no local network: a notice of its own, not "ip not found".
+  assert.equal(none.discovery.scanUnavailable, false)
+  assert.equal(none.discovery.noLocalNetwork, true)
+  const missing = M.acceptNets(d, 1, [], false)
+  assert.equal(missing.discovery.scanUnavailable, true)
+  assert.equal(missing.discovery.noLocalNetwork, false)
+  assert.deepEqual(M.buildSetupModel([], none.discovery, M.emptyForm(), "", true, "").notices, [M.TEXT.setup.noLocalNetwork])
+  assert.deepEqual(M.buildSetupModel([], missing.discovery, M.emptyForm(), "", true, "").notices, [M.TEXT.setup.scanUnavailable])
   // An old search's answer changes nothing.
   const stale = M.acceptNets(d, 0, nets(), true)
   assert.equal(stale.discovery, d)
